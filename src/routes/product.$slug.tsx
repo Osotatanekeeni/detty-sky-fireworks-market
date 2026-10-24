@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button";
 import { formatNaira, lineTotals, tierFor } from "@/lib/pricing";
 import { getCategory, getProduct, getReviews, ratingFor, relatedProducts } from "@/lib/services";
 import { useStore } from "@/lib/store";
+import { DeliverTo } from "@/components/site/Shell";
+import { loadCatalogue, useCatalogue } from "@/lib/catalogue";
+import { formatArrives } from "@/lib/db-map";
+import { isCategoryBlocked } from "@/lib/services";
 
 export const Route = createFileRoute("/product/$slug")({
-  loader: ({ params }) => {
-    const p = getProduct(params.slug);
+  loader: async ({ params, context }) => {
+    const p = getProduct(await loadCatalogue(context.queryClient), params.slug);
     if (!p) throw notFound();
     return { p };
   },
@@ -48,13 +52,21 @@ function VideoPreview({ poster, name }: { poster: string; name: string }) {
 }
 
 function ProductPage() {
-  const { p } = Route.useLoaderData();
-  const { add, wishlist, toggleWish } = useStore();
+  const loaded = Route.useLoaderData().p;
+  const cat = useCatalogue();
+  // Prefer the live catalogue over loader data so admin edits show without a reload.
+  const p = getProduct(cat, loaded.slug) ?? loaded;
+  const { add, wishlist, toggleWish, deliveryState } = useStore();
+  const { campaign } = cat;
   const [qty, setQty] = useState(1);
+  const blocked = isCategoryBlocked(cat, deliveryState ?? undefined, p.category);
+  const preorderClosed = !!p.preorder && !campaign.preordersOpen;
+  const soldOut = !p.preorder && p.stock <= 0;
+  const cannotBuy = blocked || preorderClosed || soldOut;
   const [img, setImg] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
-  const r = ratingFor(p.id);
-  const reviews = getReviews(p.id);
+  const r = ratingFor(cat, p.id);
+  const reviews = getReviews(cat, p.id);
   const t = lineTotals(p.price, qty, p.tiers);
   const activeTier = tierFor(qty, p.tiers);
 
@@ -83,7 +95,7 @@ function ProductPage() {
         <div>
           {p.preorder && (
             <div className="mb-4 rounded-2xl border border-royal/60 bg-royal/15 p-3 text-sm">
-              <strong className="text-gold">Pre-order — arrives {p.preorder.arrives}.</strong> Pay now, we deliver before New Year's Eve.
+              <strong className="text-gold">Pre-order — arrives {formatArrives(p.preorder.arrives)}.</strong> Pay now, we deliver before New Year's Eve.
             </div>
           )}
           <p className="text-xs uppercase tracking-[0.2em] text-magenta">{getCategory(p.category)?.name}</p>
@@ -110,7 +122,7 @@ function ProductPage() {
               <tbody>
                 {[{ minQty: 1, discountPct: 0 }, ...p.tiers].map((tier, i, arr) => (
                   <tr key={tier.minQty} className={(activeTier?.minQty ?? 1) === tier.minQty ? "text-gold" : ""}>
-                    <td className="py-1">{tier.minQty}{arr[i + 1] ? `–${arr[i + 1].minQty - 1}` : "+"}</td>
+                    <td className="py-1">{tier.minQty}{arr[i + 1] ? `–${arr[i + 1]!.minQty - 1}` : "+"}</td>
                     <td>{tier.discountPct ? `${tier.discountPct}% off` : "—"}</td>
                     <td>{formatNaira(p.price * (1 - tier.discountPct / 100))}</td>
                   </tr>
@@ -125,16 +137,18 @@ function ProductPage() {
               <input value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} className="w-12 bg-transparent text-center font-semibold outline-none" aria-label="Quantity" inputMode="numeric" />
               <button className="p-3" onClick={() => setQty((q) => q + 1)} aria-label="Increase quantity"><Plus className="h-4 w-4" /></button>
             </div>
-            <Button variant="gold" size="lg" className="relative flex-1" onClick={() => { add({ productId: p.id, qty }); setBurst((b) => b + 1); toast.success(`${qty} × ${p.name} added to cart`); }}>
-              {p.preorder ? "Pre-order" : "Add to cart"} · {formatNaira(t.total)}
+            <Button variant="gold" size="lg" className="relative flex-1" disabled={cannotBuy} onClick={() => { add({ productId: p.id, qty }); setBurst((b) => b + 1); toast.success(`${qty} × ${p.name} added to cart`); }}>
+              {blocked ? `Unavailable in ${deliveryState}` : preorderClosed ? "Pre-orders closed" : soldOut ? "Sold out" : <>{p.preorder ? "Pre-order" : "Add to cart"} · {formatNaira(t.total)}</>}
               <SparkBurst trigger={burst} />
             </Button>
             <Button variant="glass" size="lg" onClick={() => toggleWish(p.id)} aria-label="Toggle wishlist" aria-pressed={wishlist.includes(p.id)}>
               <Heart className={wishlist.includes(p.id) ? "fill-magenta text-magenta" : ""} />
             </Button>
           </div>
+          <DeliverTo className="mt-3" />
+          {blocked && <p className="mt-2 rounded-xl border border-ember/50 bg-ember/10 p-3 text-sm">{getCategory(p.category)?.name} can't be delivered to {deliveryState} right now due to local restrictions. Choose another state above or browse other categories.</p>}
           {t.discount > 0 && <p className="mt-2 text-sm text-emerald">You save {formatNaira(t.discount)} with bulk pricing 🎉</p>}
-          {p.stock < p.lowStockThreshold && <p className="mt-2 text-sm text-ember">Hurry — only {p.stock} left in stock.</p>}
+          {!soldOut && !p.preorder && p.stock < p.lowStockThreshold && <p className="mt-2 text-sm text-ember">Hurry — only {p.stock} left in stock.</p>}
 
           <details className="glass mt-6 rounded-2xl p-4" open>
             <summary className="flex cursor-pointer items-center gap-2 font-semibold"><ShieldAlert className="h-4 w-4 text-ember" /> Safety instructions</summary>
@@ -196,7 +210,7 @@ function ProductPage() {
 
       <section className="mt-20">
         <SectionTitle eyebrow="More sparkle" title="You might also like" />
-        <ProductGrid products={relatedProducts(p)} />
+        <ProductGrid products={relatedProducts(cat, p)} />
       </section>
     </div>
   );

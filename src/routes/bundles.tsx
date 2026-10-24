@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { SparkBurst } from "@/components/site/Fireworks";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/pricing";
-import { bundleValue, getProductById, listBundles } from "@/lib/services";
+import { useCatalogue } from "@/lib/catalogue";
+import { bundleValue, getProductById } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import type { Bundle } from "@/lib/types";
 
@@ -26,7 +27,7 @@ function Bundles() {
       <p className="text-xs uppercase tracking-[0.2em] text-magenta">Bundles</p>
       <h1 className="text-3xl sm:text-5xl">Packs that <span className="text-gold-gradient">pack a punch</span></h1>
       <p className="mt-2 max-w-xl text-muted-foreground">Hand-picked combos so you don't have to think. Just light am.</p>
-      <div className="mt-10 grid gap-6 md:grid-cols-2">{listBundles().map((b) => <BundleCard key={b.id} b={b} />)}</div>
+      <div className="mt-10 grid gap-6 md:grid-cols-2">{useCatalogue().bundles.map((b) => <BundleCard key={b.id} b={b} />)}</div>
     </div>
   );
 }
@@ -34,7 +35,8 @@ function Bundles() {
 function BundleCard({ b }: { b: Bundle }) {
   const { add } = useStore();
   const [burst, setBurst] = useState(0);
-  const value = bundleValue(b);
+  const cat = useCatalogue();
+  const value = bundleValue(cat, b);
   return (
     <article className="glass overflow-hidden rounded-3xl shadow-card">
       <div className="relative">
@@ -46,7 +48,8 @@ function BundleCard({ b }: { b: Bundle }) {
         <p className="text-sm text-muted-foreground">{b.tagline}</p>
         <ul className="mt-4 space-y-1.5 text-sm">
           {b.items.map((i) => {
-            const p = getProductById(i.productId)!;
+            const p = getProductById(cat, i.productId);
+            if (!p) return null;
             return <li key={i.productId} className="flex justify-between"><span>{i.qty} × {p.name}</span><span className="text-muted-foreground">{formatNaira(p.price * i.qty)}</span></li>;
           })}
         </ul>

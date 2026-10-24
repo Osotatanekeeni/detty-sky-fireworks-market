@@ -1,8 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Heart, Menu, MessageCircle, Search, ShoppingBag, Sparkles, User, X } from "lucide-react";
+import { Heart, MapPin, Menu, MessageCircle, Search, ShoppingBag, Sparkles, User, X } from "lucide-react";
+import type { StateName } from "@/lib/types";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, OCCASIONS, STATES, WHATSAPP_NUMBER } from "@/lib/data";
+import { useCatalogue } from "@/lib/catalogue";
 import { formatNaira } from "@/lib/pricing";
 import { listProducts } from "@/lib/services";
 import { useCartDetails, useStore } from "@/lib/store";
@@ -21,7 +23,8 @@ export function Logo() {
 function InstantSearch({ onDone }: { onDone?: () => void }) {
   const [q, setQ] = useState("");
   const nav = useNavigate();
-  const results = q.length > 1 ? listProducts({ q }).slice(0, 5) : [];
+  const cat = useCatalogue();
+  const results = q.length > 1 ? listProducts(cat, { q }).slice(0, 5) : [];
   return (
     <div className="relative w-full">
       <form
@@ -59,9 +62,26 @@ function InstantSearch({ onDone }: { onDone?: () => void }) {
   );
 }
 
+/** "Deliver to" picker — drives the per-state category kill switch on product pages. */
+export function DeliverTo({ className = "" }: { className?: string }) {
+  const { deliveryState, setDeliveryState } = useStore();
+  return (
+    <label className={`flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
+      <MapPin className="h-3.5 w-3.5 text-gold" />
+      <span className="sr-only sm:not-sr-only">Deliver to</span>
+      <select value={deliveryState ?? ""} onChange={(e) => setDeliveryState((e.target.value || null) as StateName | null)}
+        className="cursor-pointer bg-transparent font-semibold text-foreground outline-none" aria-label="Delivery state">
+        <option value="" className="bg-card">Choose state</option>
+        {STATES.map((st) => <option key={st} value={st} className="bg-card">{st}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function Header() {
   const { count } = useCartDetails();
   const { bump, wishlist } = useStore();
+  const { campaign } = useCatalogue();
   const [open, setOpen] = useState(false);
   const [anim, setAnim] = useState(false);
   useEffect(() => {
@@ -73,9 +93,11 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="bg-party-gradient py-1.5 text-center text-xs font-semibold text-primary-foreground">
-        🎆 December pre-orders are open — <Link to="/shop" search={{ preorder: true }} className="underline">secure your crossover stock</Link>
-      </div>
+      {campaign.announcement && (
+        <div className="bg-party-gradient py-1.5 text-center text-xs font-semibold text-primary-foreground">
+          {campaign.preordersOpen ? <Link to="/shop" search={{ preorder: true }} className="hover:underline">{campaign.announcement}</Link> : campaign.announcement}
+        </div>
+      )}
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
         <button className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
         <Logo />
@@ -87,6 +109,7 @@ function Header() {
           <Link to="/delivery" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Delivery</Link>
         </nav>
         <div className="ml-auto hidden w-72 md:block"><InstantSearch /></div>
+        <DeliverTo className="hidden xl:flex" />
         <div className="ml-auto flex items-center gap-1 md:ml-2">
           <Link to="/account" search={{ tab: "wishlist" }} className="relative rounded-full p-2 hover:bg-accent" aria-label={`Wishlist, ${wishlist.length} items`}>
             <Heart className="h-5 w-5" />
@@ -101,12 +124,13 @@ function Header() {
           </Link>
         </div>
       </div>
-      <div className="px-4 pb-3 md:hidden"><InstantSearch /></div>
+      <div className="flex items-center gap-3 px-4 pb-3 md:hidden"><InstantSearch /></div>
 
       {open && (
         <div className="fixed inset-0 z-50 bg-background/95 p-6 backdrop-blur-xl lg:hidden" role="dialog" aria-label="Menu">
           <div className="flex items-center justify-between"><Logo /><button onClick={() => setOpen(false)} aria-label="Close menu"><X /></button></div>
           <div className="mt-8 grid gap-6">
+            <DeliverTo className="glass w-fit rounded-full px-3 py-2 text-sm" />
             <div>
               <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">Categories</p>
               <div className="grid grid-cols-2 gap-2">
@@ -124,7 +148,7 @@ function Header() {
               </div>
             </div>
             <nav className="grid gap-3 font-display text-xl">
-              {([["/shop", "Shop all"], ["/bundles", "Bundles"], ["/bulk", "Bulk quote"], ["/safety", "Safety guide"], ["/delivery", "Delivery info"], ["/account", "My account"]] as const).map(([to, l]) => (
+              {([["/shop", "Shop all"], ["/bundles", "Bundles"], ["/bulk", "Bulk quote"], ["/safety", "Safety guide"], ["/delivery", "Delivery info"], ["/track", "Track an order"], ["/account", "My account"]] as const).map(([to, l]) => (
                 <Link key={to} to={to} onClick={() => setOpen(false)}>{l}</Link>
               ))}
             </nav>
@@ -160,7 +184,7 @@ function Footer() {
             <li><Link to="/safety" className="hover:text-gold">Safety guide</Link></li>
             <li><Link to="/delivery" className="hover:text-gold">Delivery info</Link></li>
             <li><Link to="/bulk" className="hover:text-gold">Bulk quotes</Link></li>
-            <li><Link to="/account" className="hover:text-gold">Track my order</Link></li>
+            <li><Link to="/track" className="hover:text-gold">Track my order</Link></li>
           </ul>
         </div>
         <div>
@@ -190,7 +214,9 @@ function WhatsAppButton() {
 
 function AgeGate() {
   const [state, setState] = useState<"hidden" | "ask" | "under">("hidden");
-  useEffect(() => { if (localStorage.getItem("detty-age-ok") !== "1") setState("ask"); }, []);
+  useEffect(() => {
+    try { if (localStorage.getItem("detty-age-ok") !== "1") setState("ask"); } catch { setState("ask"); }
+  }, []);
   if (state === "hidden") return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-night/95 p-6 backdrop-blur-xl" role="dialog" aria-modal="true" aria-labelledby="age-title">
@@ -201,7 +227,7 @@ function AgeGate() {
             <h2 id="age-title" className="mt-4 text-2xl">Are you 18 or older?</h2>
             <p className="mt-2 text-sm text-muted-foreground">Fireworks are sold to adults only. Please confirm your age to enter Detty Sky.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <Button variant="gold" size="lg" autoFocus onClick={() => { localStorage.setItem("detty-age-ok", "1"); setState("hidden"); }}>Yes, I'm 18+</Button>
+              <Button variant="gold" size="lg" autoFocus onClick={() => { try { localStorage.setItem("detty-age-ok", "1"); } catch { /* private mode */ } setState("hidden"); }}>Yes, I'm 18+</Button>
               <Button variant="glass" size="lg" onClick={() => setState("under")}>No</Button>
             </div>
           </>

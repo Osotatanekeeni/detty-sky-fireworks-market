@@ -1,29 +1,34 @@
-// Mock data services. Swap these implementations for real API/database calls later;
-// components only depend on these function signatures.
-import { BUNDLES, CATEGORIES, CATEGORY_STATE_BLOCKS, DELIVERY_ZONES, OCCASIONS, ORDERS, PRODUCTS, REVIEWS } from "./data";
-import type { CategorySlug, NoiseLevel, OccasionSlug, Product, StateName } from "./types";
+// Read services. Catalogue reads are pure functions over the Supabase-loaded catalogue
+// (components get it from useCatalogue()). Order reads still use the mock database until
+// checkout moves to Supabase in Phase 2.
+import type { Catalogue } from "./catalogue";
+import { CATEGORIES, OCCASIONS } from "./data";
+import { db } from "./mock-db";
+import type { Bundle, CategorySlug, NoiseLevel, OccasionSlug, Order, Product, StateName } from "./types";
+
+type Cat<K extends keyof Catalogue> = Pick<Catalogue, K>;
 
 export interface ProductFilters {
-  q?: string;
-  category?: CategorySlug;
-  occasion?: OccasionSlug;
-  minPrice?: number;
-  maxPrice?: number;
-  noise?: NoiseLevel;
-  maxDuration?: number;
-  minShots?: number;
-  sort?: "featured" | "price-asc" | "price-desc" | "rating" | "shots";
+  q?: string | undefined;
+  category?: CategorySlug | undefined;
+  occasion?: OccasionSlug | undefined;
+  minPrice?: number | undefined;
+  maxPrice?: number | undefined;
+  noise?: NoiseLevel | undefined;
+  maxDuration?: number | undefined;
+  minShots?: number | undefined;
+  sort?: "featured" | "price-asc" | "price-desc" | "rating" | "shots" | undefined;
 }
 
-export function ratingFor(productId: string) {
-  const rs = REVIEWS.filter((r) => r.productId === productId && r.status === "approved");
+export function ratingFor(c: Cat<"reviews">, productId: string) {
+  const rs = c.reviews.filter((r) => r.productId === productId && r.status === "approved");
   const avg = rs.length ? rs.reduce((s, r) => s + r.rating, 0) / rs.length : 0;
   const breakdown = [5, 4, 3, 2, 1].map((star) => ({ star, count: rs.filter((r) => r.rating === star).length }));
   return { avg, count: rs.length, breakdown };
 }
 
-export function listProducts(f: ProductFilters = {}): Product[] {
-  let list = PRODUCTS.filter((p) => {
+export function listProducts(c: Cat<"products" | "reviews">, f: ProductFilters = {}): Product[] {
+  let list = c.products.filter((p) => {
     if (f.q && !`${p.name} ${p.category} ${p.colours.join(" ")}`.toLowerCase().includes(f.q.toLowerCase())) return false;
     if (f.category && p.category !== f.category) return false;
     if (f.occasion && !p.occasions.includes(f.occasion)) return false;
@@ -37,35 +42,49 @@ export function listProducts(f: ProductFilters = {}): Product[] {
   switch (f.sort) {
     case "price-asc": list = [...list].sort((a, b) => a.price - b.price); break;
     case "price-desc": list = [...list].sort((a, b) => b.price - a.price); break;
-    case "rating": list = [...list].sort((a, b) => ratingFor(b.id).avg - ratingFor(a.id).avg); break;
+    case "rating": list = [...list].sort((a, b) => ratingFor(c, b.id).avg - ratingFor(c, a.id).avg); break;
     case "shots": list = [...list].sort((a, b) => b.shots - a.shots); break;
     default: list = [...list].sort((a, b) => Number(!!b.bestSeller) - Number(!!a.bestSeller));
   }
   return list;
 }
 
-export const getProduct = (slug: string) => PRODUCTS.find((p) => p.slug === slug);
-export const getProductById = (id: string) => PRODUCTS.find((p) => p.id === id);
-export const getReviews = (productId: string) => REVIEWS.filter((r) => r.productId === productId && r.status === "approved");
-export const relatedProducts = (p: Product) => PRODUCTS.filter((x) => x.id !== p.id && (x.category === p.category || x.occasions.some((o) => p.occasions.includes(o)))).slice(0, 4);
-export const bestSellers = () => PRODUCTS.filter((p) => p.bestSeller);
-export const listBundles = () => BUNDLES;
-export const bundleValue = (b: (typeof BUNDLES)[number]) => b.items.reduce((s, i) => s + (getProductById(i.productId)?.price ?? 0) * i.qty, 0);
+export const getProduct = (c: Cat<"products">, slug: string) => c.products.find((p) => p.slug === slug);
+export const getProductById = (c: Cat<"products">, id: string) => c.products.find((p) => p.id === id);
+export const getReviews = (c: Cat<"reviews">, productId: string) =>
+  c.reviews.filter((r) => r.productId === productId && r.status === "approved");
+export const relatedProducts = (c: Cat<"products">, p: Product) =>
+  c.products.filter((x) => x.id !== p.id && (x.category === p.category || x.occasions.some((o) => p.occasions.includes(o)))).slice(0, 4);
+export const bestSellers = (c: Cat<"products">) => c.products.filter((p) => p.bestSeller);
+export const getBundle = (c: Cat<"bundles">, id: string) => c.bundles.find((b) => b.id === id);
+export const bundleValue = (c: Cat<"products">, b: Bundle) =>
+  b.items.reduce((s, i) => s + (getProductById(c, i.productId)?.price ?? 0) * i.qty, 0);
 export const getCategory = (slug: string) => CATEGORIES.find((c) => c.slug === slug);
 export const getOccasion = (slug: string) => OCCASIONS.find((o) => o.slug === slug);
-export const getOrder = (id: string) => ORDERS.find((o) => o.id === id);
+export const getOrder = (id: string) => db.get().orders.find((o) => o.id.toLowerCase() === id.trim().toLowerCase());
 
-export function deliveryQuote(state?: StateName, city?: string) {
-  const zone = DELIVERY_ZONES.find((z) => z.state === state);
-  const c = zone?.cities.find((x) => x.name === city);
-  if (!c) return null;
-  const eta = new Date();
-  eta.setDate(eta.getDate() + c.days);
-  return { fee: c.fee, days: c.days, eta };
+const digits = (s: string) => s.replace(/\D/g, "").slice(-10);
+/** Guest order lookup: order number + the phone used at checkout. */
+export function findOrderForTracking(id: string, phone: string): Order | undefined {
+  const o = getOrder(id);
+  return o && digits(o.customer.phone) === digits(phone) ? o : undefined;
 }
 
-export const isCategoryBlocked = (state: StateName | undefined, cat: CategorySlug) =>
-  !!state && !!CATEGORY_STATE_BLOCKS[state]?.includes(cat);
+/** Orders that belong to a signed-in customer (matched by email — guest orders attach automatically). */
+export const ordersForEmail = (email: string) =>
+  db.get().orders.filter((o) => o.customer.email.toLowerCase() === email.toLowerCase());
+
+export function deliveryQuote(c: Cat<"zones">, state?: StateName, city?: string) {
+  const zone = c.zones.find((z) => z.state === state);
+  const found = zone?.cities.find((x) => x.name === city);
+  if (!found) return null;
+  const eta = new Date();
+  eta.setDate(eta.getDate() + found.days);
+  return { fee: found.fee, days: found.days, eta };
+}
+
+export const isCategoryBlocked = (c: Cat<"blocks">, state: StateName | undefined, cat: CategorySlug) =>
+  !!state && !!c.blocks[state]?.includes(cat);
 
 export function nextNewYearEve() {
   // Midnight WAT (UTC+1) at the start of Jan 1 => Dec 31 23:00 UTC

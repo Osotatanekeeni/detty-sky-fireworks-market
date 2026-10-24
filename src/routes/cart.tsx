@@ -3,6 +3,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/pricing";
 import { useCartDetails, useStore } from "@/lib/store";
+import { formatArrives } from "@/lib/db-map";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -41,7 +42,7 @@ function Cart() {
                   <p className="font-semibold">{l.name}</p>
                   <button onClick={() => remove(l.key)} aria-label={`Remove ${l.name}`} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                 </div>
-                <p className="text-xs text-muted-foreground">{formatNaira(l.unit)} each{l.bundleId ? " · bundle" : ""}{l.preorder ? ` · Pre-order, arrives ${l.preorder.arrives}` : ""}</p>
+                <p className="text-xs text-muted-foreground">{formatNaira(l.unit)} each{l.bundleId ? " · bundle" : ""}{l.preorder ? ` · Pre-order, arrives ${formatArrives(l.preorder.arrives)}` : ""}</p>
                 {l.discount > 0 && <p className="text-xs font-semibold text-emerald">Bulk discount −{formatNaira(l.discount)}</p>}
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <div className="flex items-center rounded-full border border-border">

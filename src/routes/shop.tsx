@@ -4,25 +4,26 @@ import { useState } from "react";
 import { ProductGrid } from "@/components/site/ProductCard";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, OCCASIONS } from "@/lib/data";
+import { useCatalogue } from "@/lib/catalogue";
 import { listProducts, type ProductFilters } from "@/lib/services";
 import type { CategorySlug, NoiseLevel, OccasionSlug } from "@/lib/types";
 
 type Search = {
-  q?: string; category?: CategorySlug; occasion?: OccasionSlug; noise?: NoiseLevel;
-  maxPrice?: number; maxDuration?: number; minShots?: number; sort?: ProductFilters["sort"]; preorder?: boolean;
+  q?: string | undefined; category?: CategorySlug | undefined; occasion?: OccasionSlug | undefined; noise?: NoiseLevel | undefined;
+  maxPrice?: number | undefined; maxDuration?: number | undefined; minShots?: number | undefined; sort?: ProductFilters["sort"]; preorder?: boolean | undefined;
 };
 
 export const Route = createFileRoute("/shop")({
   validateSearch: (s: Record<string, unknown>): Search => ({
-    q: typeof s.q === "string" && s.q ? s.q : undefined,
-    category: CATEGORIES.some((c) => c.slug === s.category) ? (s.category as CategorySlug) : undefined,
-    occasion: OCCASIONS.some((o) => o.slug === s.occasion) ? (s.occasion as OccasionSlug) : undefined,
-    noise: ["Quiet", "Medium", "Loud"].includes(s.noise as string) ? (s.noise as NoiseLevel) : undefined,
-    maxPrice: Number(s.maxPrice) || undefined,
-    maxDuration: Number(s.maxDuration) || undefined,
-    minShots: Number(s.minShots) || undefined,
-    sort: (s.sort as Search["sort"]) || undefined,
-    preorder: s.preorder === true || s.preorder === "true" ? true : undefined,
+    q: typeof s["q"] === "string" && s["q"] ? s["q"] : undefined,
+    category: CATEGORIES.some((c) => c.slug === s["category"]) ? (s["category"] as CategorySlug) : undefined,
+    occasion: OCCASIONS.some((o) => o.slug === s["occasion"]) ? (s["occasion"] as OccasionSlug) : undefined,
+    noise: ["Quiet", "Medium", "Loud"].includes(s["noise"] as string) ? (s["noise"] as NoiseLevel) : undefined,
+    maxPrice: Number(s["maxPrice"]) || undefined,
+    maxDuration: Number(s["maxDuration"]) || undefined,
+    minShots: Number(s["minShots"]) || undefined,
+    sort: (s["sort"] as Search["sort"]) || undefined,
+    preorder: s["preorder"] === true || s["preorder"] === "true" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -42,9 +43,9 @@ function Shop() {
   const nav = useNavigate({ from: "/shop" });
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<Search>) => nav({ search: (prev) => ({ ...prev, ...patch }), replace: true });
-  let products = listProducts(s);
+  let products = listProducts(useCatalogue(), s);
   if (s.preorder) products = products.filter((p) => p.preorder);
-  const title = s.category ? CATEGORIES.find((c) => c.slug === s.category)!.name : s.occasion ? OCCASIONS.find((o) => o.slug === s.occasion)!.name : s.preorder ? "December pre-orders" : s.q ? `Results for “${s.q}”` : "All fireworks";
+  const title = s.category ? CATEGORIES.find((c) => c.slug === s.category)?.name : s.occasion ? OCCASIONS.find((o) => o.slug === s.occasion)?.name : s.preorder ? "December pre-orders" : s.q ? `Results for “${s.q}”` : "All fireworks";
 
   const filters = (
     <div className="space-y-6">

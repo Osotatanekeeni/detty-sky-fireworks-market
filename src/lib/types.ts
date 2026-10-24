@@ -26,8 +26,11 @@ export interface Product {
   colours: string[];
   description: string;
   stock: number;
+  /** Units held by unpaid orders. Sellable = stock - reserved. */
+  reserved?: number;
   lowStockThreshold: number;
   tiers: PriceTier[];
+  /** `arrives` is an ISO date (YYYY-MM-DD); show it with formatArrives(). */
   preorder?: { arrives: string };
   bestSeller?: boolean;
 }
@@ -44,6 +47,8 @@ export interface Review {
   verified: boolean;
   media?: { type: "photo" | "video"; src: string }[];
   status: "approved" | "hidden" | "pending";
+  /** The order this review is tied to — what makes it a "verified purchase". */
+  orderId?: string;
 }
 
 export interface Bundle {
@@ -60,7 +65,17 @@ export interface City { name: string; fee: number; days: number; }
 export interface DeliveryZone { state: StateName; cities: City[]; }
 
 export type OrderStatus = "Processing" | "Dispatched" | "Out for Delivery" | "Delivered";
-export interface OrderLine { productId: string; name: string; qty: number; unitPrice: number; }
+export interface OrderLine {
+  /** Product id, or bundle id when `kind` is "bundle", or "custom" for admin-created lines (e.g. converted bulk quotes). */
+  productId: string;
+  kind?: "product" | "bundle" | "custom";
+  name: string;
+  qty: number;
+  unitPrice: number;
+  preorderArrives?: string;
+}
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export interface Payment { provider: "paystack"; reference: string; channel: "card" | "bank_transfer" | "ussd" | "manual"; status: PaymentStatus; paidAt?: string; }
 export interface Order {
   id: string;
   createdAt: string;
@@ -74,6 +89,13 @@ export interface Order {
   status: OrderStatus;
   history: { status: OrderStatus; at: string }[];
   eta: string;
+  /** Discount-code savings (bulk discounts are in `discount`). */
+  codeDiscount?: number;
+  code?: string;
+  payment?: Payment;
+  /** Set when an order was created from a bulk quote. */
+  quoteId?: string;
+  note?: string;
 }
 
 export type QuoteStatus = "New" | "Quoted" | "Converted" | "Closed";
@@ -90,6 +112,20 @@ export interface BulkQuote {
   notes: string;
   status: QuoteStatus;
   createdAt: string;
+  email?: string;
+  response?: string;
+  quotedAmount?: number;
+  orderId?: string;
 }
 
 export interface DiscountCode { code: string; pct: number; active: boolean; uses: number; }
+
+export interface Banner { id: string; title: string; subtitle: string; cta: string; href: string; tone: "gold" | "party" | "royal"; active: boolean; }
+export interface Campaign {
+  /** Text in the announcement bar above the header. */
+  announcement: string;
+  preordersOpen: boolean;
+  /** Label above the hero countdown. */
+  countdownLabel: string;
+}
+export interface Address { id: string; label: string; state: StateName; city: string; street: string; phone: string; }
