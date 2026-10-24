@@ -106,6 +106,7 @@ export function productFromRow(r: ProductRow): Product {
   const gallery = media.filter((m) => m.kind === "image").map((m) => m.url);
   const image = gallery[0] ?? "";
   const poster = media.find((m) => m.kind === "poster")?.url ?? image;
+  const video = media.find((m) => m.kind === "video")?.url;
   return {
     id: r.id,
     slug: r.slug,
@@ -117,6 +118,7 @@ export function productFromRow(r: ProductRow): Product {
     image,
     gallery,
     videoPoster: poster,
+    ...(video ? { video } : {}),
     durationSec: r.duration_sec,
     shots: r.shots,
     heightM: Number(r.height_m),
@@ -215,10 +217,11 @@ export const productToRow = (p: Product) => ({
  *  when the video poster isn't the cover (productFromRow falls back to the cover). */
 export function productMediaRows(p: Product) {
   const images = [...new Set([p.image, ...p.gallery].filter(Boolean))];
-  const rows: { product_id: string; kind: "image" | "poster"; url: string; sort: number }[] =
+  const rows: { product_id: string; kind: "image" | "poster" | "video"; url: string; sort: number }[] =
     images.map((url, sort) => ({ product_id: p.id, kind: "image", url, sort }));
   if (p.videoPoster && p.videoPoster !== images[0])
     rows.push({ product_id: p.id, kind: "poster", url: p.videoPoster, sort: 0 });
+  if (p.video) rows.push({ product_id: p.id, kind: "video", url: p.video, sort: 0 });
   return rows;
 }
 

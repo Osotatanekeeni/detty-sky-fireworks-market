@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Fireworks, SparkBurst } from "@/components/site/Fireworks";
 import { ProductGrid, SectionTitle, Stars } from "@/components/site/ProductCard";
+import { ReviewMediaThumb } from "@/components/site/ReviewMedia";
 import { Button } from "@/components/ui/button";
 import { formatNaira, lineTotals, tierFor } from "@/lib/pricing";
 import { getCategory, getProduct, getReviews, ratingFor, relatedProducts } from "@/lib/services";
@@ -33,13 +34,19 @@ export const Route = createFileRoute("/product/$slug")({
   component: ProductPage,
 });
 
-function VideoPreview({ poster, name }: { poster: string; name: string }) {
+/** The real clip (from R2) is only requested when the shopper taps play — mobile data matters.
+ *  Products without a clip fall back to the canvas fireworks. */
+function VideoPreview({ poster, name, video }: { poster: string; name: string; video?: string | undefined }) {
   const [playing, setPlaying] = useState(false);
   return (
     <div className="relative aspect-square overflow-hidden rounded-3xl bg-night">
       <img src={poster} alt={`${name} preview`} className={`h-full w-full object-cover transition-opacity ${playing ? "opacity-25" : ""}`} />
       {playing ? (
-        <div className="absolute inset-0"><Fireworks intensity={1.6} /></div>
+        video ? (
+          <video src={video} poster={poster} autoPlay muted playsInline loop controls preload="none" className="absolute inset-0 h-full w-full bg-night object-contain" aria-label={`${name} video`} />
+        ) : (
+          <div className="absolute inset-0"><Fireworks intensity={1.6} /></div>
+        )
       ) : (
         <button onClick={() => setPlaying(true)} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-night/30" aria-label={`Play video preview of ${name}`}>
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gold-gradient text-primary-foreground shadow-glow"><Play className="ml-1 h-7 w-7" /></span>
@@ -77,7 +84,7 @@ function ProductPage() {
       </nav>
       <div className="grid gap-10 lg:grid-cols-2">
         <div className="space-y-3">
-          {img === null ? <VideoPreview poster={p.videoPoster} name={p.name} /> : (
+          {img === null ? <VideoPreview poster={p.videoPoster} name={p.name} video={p.video} /> : (
             <img src={p.gallery[img]} alt={`${p.name} photo ${img + 1}`} className="aspect-square w-full rounded-3xl object-cover" />
           )}
           <div className="flex gap-2">
@@ -194,10 +201,7 @@ function ProductPage() {
                 {rv.media && (
                   <div className="mt-3 flex gap-2">
                     {rv.media.map((m, i) => (
-                      <div key={i} className="relative h-20 w-20 overflow-hidden rounded-lg">
-                        <img src={m.src} alt="Customer upload" loading="lazy" className="h-full w-full object-cover" />
-                        {m.type === "video" && <Play className="absolute inset-0 m-auto h-6 w-6" />}
-                      </div>
+                      <ReviewMediaThumb key={i} m={m} poster={p.image} />
                     ))}
                   </div>
                 )}

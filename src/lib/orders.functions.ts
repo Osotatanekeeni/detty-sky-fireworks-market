@@ -135,7 +135,14 @@ export const myReviews = createServerFn({ method: "GET" }).handler(
 /** RLS only accepts reviews for the caller's own delivered order item; status always starts pending. */
 export const submitReview = createServerFn({ method: "POST" })
   .validator(
-    (d: { orderItemId: string; productId: string; rating: number; title: string; body: string }) =>
+    (d: {
+      orderItemId: string;
+      productId: string;
+      rating: number;
+      title: string;
+      body: string;
+      media?: { type: "photo" | "video"; src: string }[];
+    }) =>
       z
         .object({
           orderItemId: z.string().uuid(),
@@ -143,6 +150,10 @@ export const submitReview = createServerFn({ method: "POST" })
           rating: z.number().int().min(1).max(5),
           title: z.string().trim().min(3).max(120),
           body: z.string().trim().min(10).max(4000),
+          media: z
+            .array(z.object({ type: z.enum(["photo", "video"]), src: z.string().url() }))
+            .max(4)
+            .default([]),
         })
         .parse(d),
   )
@@ -150,31 +161,42 @@ export const submitReview = createServerFn({ method: "POST" })
     const db = supabaseForRequest();
     const { data: u } = await db.auth.getUser();
     if (!u.user) throw new Error("Sign in to leave a review.");
-    const { data: prof } = await db
-      .from("profiles")
-      .select("full_name")
-      .eq("id", u.user.id)
-      .single();
+    const uid = u.user.id;
+    // Media must be files this user uploaded through createUpload (reviews/<uid>/…).
+    const base = (process.env["R2_PUBLIC_URL"] ?? "").replace(/\/$/, "");
+    if (data.media.some((m) => !base || !m.src.startsWith(`${base}/reviews/${uid}/`)))
+      throw new Error("Please re-upload your photos.");
+    const { data: prof } = await db.from("profiles").select("full_name").eq("id", uid).single();
     const { data: item } = await db
       .from("order_items")
       .select("orders(city)")
       .eq("id", data.orderItemId)
       .maybeSingle();
     const [first, last = ""] = (prof?.full_name?.trim() || "Customer").split(/\s+/);
-    const { error } = await db.from("reviews").insert({
-      product_id: data.productId,
-      order_item_id: data.orderItemId,
-      user_id: u.user.id,
-      rating: data.rating,
-      title: data.title,
-      body: data.body,
-      author_display: `${first} ${last ? `${last[0]}.` : ""}`.trim(),
-      city: (item?.orders as { city?: string } | null)?.city ?? "",
-    });
+    const { data: review, error } = await db
+      .from("reviews")
+      .insert({
+        product_id: data.productId,
+        order_item_id: data.orderItemId,
+        user_id: uid,
+        rating: data.rating,
+        title: data.title,
+        body: data.body,
+        author_display: `${first} ${last ? `${last[0]}.` : ""}`.trim(),
+        city: (item?.orders as { city?: string } | null)?.city ?? "",
+      })
+      .select("id")
+      .single();
     if (error) {
       if (error.code === "23505") throw new Error("You've already reviewed this item.");
       if (error.code === "42501") throw new Error("You can review items once they're delivered.");
       throw new Error(error.message);
+    }
+    if (data.media.length) {
+      const { error: mErr } = await db
+        .from("review_media")
+        .insert(data.media.map((m) => ({ review_id: review.id, kind: m.type, url: m.src })));
+      if (mErr) throw new Error(`Review saved, but the photos didn't attach: ${mErr.message}`);
     }
     return { ok: true };
   });

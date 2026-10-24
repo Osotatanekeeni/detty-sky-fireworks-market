@@ -100,6 +100,9 @@ src/
     paystack.server.ts    initialize / verify / webhook signature (+ PAYSTACK_SIMULATE for dev)
     email.server.ts       Resend: receipt, status updates, quote replies (logs when no key)
     tracking.ts           guest tracking phone kept in sessionStorage, never in the URL
+    r2.server.ts          R2 presigned PUT (aws4fetch), UPLOAD_RULES (types/sizes per kind)
+    uploads.functions.ts  createUpload: product media (admin), review media (signed-in, own folder)
+    uploads.ts            uploadFile(kind, file) → public URL (browser)
     checkout.ts           priceCart(): the ONE pricing function (bulk tiers, codes, delivery,
                           kill switch, stock - reserved). Used by cart, checkout and placeOrder
     pricing.ts            tier maths + formatNaira
@@ -110,7 +113,7 @@ supabase/
   migrations/20261024000000_init.sql   full schema, RLS, stock/payment functions (tested on PG16)
   migrations/20261024010000_phase2.sql pg_cron hold release; set_order_status forward-only
   seed.sql                             categories, occasions, delivery cities, codes, campaign
-public/images/products/   catalogue images until Phase 3 moves media to R2
+public/images/products/   the 4 seed/stock images (new uploads go to R2)
 ```
 
 ### Data layer (current state, after Phase 2 — no mock left)
@@ -220,7 +223,7 @@ Work phase by phase on a branch per phase. Keep the mock working until its repla
 - [x] **Phase 2 — Checkout + Paystack.** (Code done; add Paystack/Resend keys — supabase/README.md.) Server fns `createCheckout`, `verifyPayment`, webhook
   route, Resend emails (receipt, status changes, quote replies), pg_cron for holds. Admin actions
   become server fns. Delete `mock-db.ts`.
-- [ ] **Phase 3 — Media.** R2 presigned uploads for product videos/images and review media.
+- [x] **Phase 3 — Media.** (Code done; create the bucket — supabase/README.md → R2.) R2 presigned uploads for product videos/images and review media.
 - [ ] **Phase 4 — Launch hardening.** Cloudflare Turnstile on bulk-quote + auth forms, rate
   limits, sitemap + Product JSON-LD for SEO, OG images, error monitoring, analytics, Paystack live
   keys, Workers Paid + Supabase Pro, backups, load test the checkout for the December spike.

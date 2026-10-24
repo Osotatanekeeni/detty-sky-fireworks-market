@@ -24,6 +24,7 @@ import {
 import { CATEGORIES, OCCASIONS, STOCK_IMAGES } from "@/lib/data";
 import { deleteProduct, newId, saveProduct } from "@/lib/admin.functions";
 import { useAdminWrite } from "@/lib/admin-write";
+import { uploadFile } from "@/lib/uploads";
 import { useCatalogue } from "@/lib/catalogue";
 import { DEFAULT_TIERS, formatNaira } from "@/lib/pricing";
 import { getCategory } from "@/lib/services";
@@ -387,39 +388,7 @@ function ProductEditor({
           />
         </AdminField>
 
-        <fieldset>
-          <legend className="mb-1 text-xs font-semibold text-muted-foreground">Main image</legend>
-          <div className="flex flex-wrap gap-2">
-            {STOCK_IMAGES.map((img) => (
-              <button
-                type="button"
-                key={img.src}
-                onClick={() => set({ image: img.src, videoPoster: img.src })}
-                aria-pressed={p.image === img.src}
-                aria-label={img.label}
-                className={`h-16 w-16 overflow-hidden rounded-lg border-2 ${p.image === img.src ? "border-gold" : "border-transparent"}`}
-              >
-                <img src={img.src} alt="" className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-          <Upload className="mx-auto h-5 w-5" />
-          <p className="mt-1">Product video & photo uploads go to Cloudflare R2 (Phase 3).</p>
-          <label className="mt-2 inline-block cursor-pointer text-gold underline">
-            Choose video
-            <input
-              type="file"
-              accept="video/mp4,video/webm"
-              className="sr-only"
-              onChange={(e) =>
-                e.target.files?.[0] &&
-                toast(`"${e.target.files[0].name}" selected — uploads switch on in Phase 3`)
-              }
-            />
-          </label>
-        </div>
+        <MediaEditor p={p} set={set} setP={setP} />
 
         <fieldset>
           <legend className="mb-1 text-xs font-semibold text-muted-foreground">
@@ -540,5 +509,135 @@ function ProductEditor({
         </div>
       </form>
     </div>
+  );
+}
+
+/** Photos (gallery; the first is the cover and video poster) and the optional product video. */
+function MediaEditor({
+  p,
+  set,
+  setP,
+}: {
+  p: Product;
+  set: (patch: Partial<Product>) => void;
+  setP: (f: (p: Product) => Product) => void;
+}) {
+  const [busy, setBusy] = useState<"" | "image" | "video">("");
+  const gallery = [...new Set([p.image, ...p.gallery].filter(Boolean))];
+  const setGallery = (g: string[]) =>
+    set({ gallery: g, image: g[0] ?? "", videoPoster: g[0] ?? "" });
+  const upload = async (kind: "image" | "video", file: File | undefined) => {
+    if (!file) return;
+    setBusy(kind);
+    try {
+      const url = await uploadFile(kind === "image" ? "product-image" : "product-video", file);
+      if (kind === "image") setGallery([...gallery, url]);
+      else set({ video: url });
+      toast.success(kind === "image" ? "Photo uploaded" : "Video uploaded — save to publish");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-1 text-xs font-semibold text-muted-foreground">
+        Photos — the first is the cover
+      </legend>
+      <ul className="flex flex-wrap gap-2">
+        {gallery.map((src, i) => (
+          <li key={src} className="relative">
+            <img
+              src={src}
+              alt={`Photo ${i + 1}`}
+              className={`h-16 w-16 rounded-lg border-2 object-cover ${i === 0 ? "border-gold" : "border-transparent"}`}
+            />
+            <div className="absolute -right-1 -top-1 flex gap-0.5">
+              {i > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setGallery([src, ...gallery.filter((g) => g !== src)])}
+                  aria-label={`Make photo ${i + 1} the cover`}
+                  className="rounded-full bg-background px-1.5 text-[10px] shadow"
+                >
+                  ★
+                </button>
+              )}
+              {gallery.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setGallery(gallery.filter((g) => g !== src))}
+                  aria-label={`Remove photo ${i + 1}`}
+                  className="rounded-full bg-background px-1.5 text-[10px] shadow"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 hover:bg-secondary">
+          <Upload className="h-4 w-4" /> {busy === "image" ? "Uploading…" : "Upload photo"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+            disabled={!!busy}
+            onChange={(e) => {
+              void upload("image", e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <span className="text-xs text-muted-foreground">JPG/PNG/WebP, under 5 MB. Or a stock image:</span>
+        {STOCK_IMAGES.map((img) => (
+          <button
+            type="button"
+            key={img.src}
+            onClick={() => !gallery.includes(img.src) && setGallery([...gallery, img.src])}
+            aria-label={`Add stock image: ${img.label}`}
+            className="h-8 w-8 overflow-hidden rounded border border-border"
+          >
+            <img src={img.src} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
+      <div className="rounded-xl border border-dashed border-border p-3 text-sm">
+        {p.video ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <video src={p.video} muted playsInline controls preload="metadata" className="h-24 rounded-lg" />
+            <button
+              type="button"
+              onClick={() =>
+                setP(({ video: _v, ...rest }) => rest)
+              }
+              className="text-destructive underline"
+            >
+              Remove video
+            </button>
+          </div>
+        ) : (
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-gold underline">
+            <Upload className="h-4 w-4" /> {busy === "video" ? "Uploading video…" : "Upload product video"}
+            <input
+              type="file"
+              accept="video/mp4,video/webm"
+              className="sr-only"
+              disabled={!!busy}
+              onChange={(e) => {
+                void upload("video", e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Short MP4/WebM, muted, 720p, under 8 MB. It only loads when a shopper taps play.
+        </p>
+      </div>
+    </fieldset>
   );
 }

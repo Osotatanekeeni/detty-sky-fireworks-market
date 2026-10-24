@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { myOrders, myReviews, submitReview } from "@/lib/orders.functions";
 import { useAddresses } from "@/lib/addresses";
 import { useAuth } from "@/lib/auth";
+import { uploadFile } from "@/lib/uploads";
 import { useCatalogue } from "@/lib/catalogue";
 import { formatNaira } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
@@ -362,6 +363,7 @@ function Reviews() {
                         rating: v.rating,
                         title: v.title,
                         body: v.body,
+                        media: v.media ?? [],
                       },
                     });
                     await qc.invalidateQueries({ queryKey: ["my-reviews"] });
@@ -397,19 +399,23 @@ function ReviewForm({
   const [body, setBody] = useState("");
   const [media, setMedia] = useState<{ type: "photo" | "video"; src: string }[]>([]);
   const [error, setError] = useState("");
-  const onFile = (file: File | undefined) => {
+  const [uploading, setUploading] = useState(false);
+  const onFile = async (file: File | undefined) => {
     if (!file) return;
-    if (file.type.startsWith("video/")) {
-      toast("Video uploads switch on when storage is connected (Phase 3). Add a photo for now.");
+    if (media.length >= 4) {
+      toast.error("Up to 4 photos or videos per review");
       return;
     }
-    if (file.size > 1_000_000) {
-      toast.error("Photos must be under 1 MB in demo mode");
-      return;
+    const type = file.type.startsWith("video/") ? "video" : "photo";
+    setUploading(true);
+    try {
+      const src = await uploadFile(type === "video" ? "review-video" : "review-photo", file);
+      setMedia((m) => [...m, { type, src }]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
     }
-    const r = new FileReader();
-    r.onload = () => setMedia((m) => [...m, { type: "photo", src: String(r.result) }]);
-    r.readAsDataURL(file);
   };
   return (
     <form
@@ -475,19 +481,23 @@ function ReviewForm({
           id="rv-media"
           type="file"
           accept="image/*,video/*"
-          onChange={(e) => onFile(e.target.files?.[0])}
+          disabled={uploading}
+          onChange={(e) => {
+            void onFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
           className="mt-1.5 block text-sm file:mr-3 file:rounded-full file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-foreground"
         />
         {media.length > 0 && (
           <div className="mt-2 flex gap-2">
-            {media.map((m, i) => (
-              <img
-                key={i}
-                src={m.src}
-                alt="Your upload"
-                className="h-16 w-16 rounded-lg object-cover"
-              />
-            ))}
+            {media.map((m, i) =>
+              m.type === "video" ? (
+                <video key={i} src={m.src} muted playsInline className="h-16 w-16 rounded-lg object-cover" />
+              ) : (
+                <img key={i} src={m.src} alt="Your upload" className="h-16 w-16 rounded-lg object-cover" />
+              ),
+            )}
+            {uploading && <span className="self-center text-xs text-muted-foreground">Uploading…</span>}
           </div>
         )}
       </div>
@@ -497,7 +507,7 @@ function ReviewForm({
         </p>
       )}
       <div className="flex gap-2">
-        <Button type="submit" variant="gold">
+        <Button type="submit" variant="gold" disabled={uploading}>
           Submit review
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>

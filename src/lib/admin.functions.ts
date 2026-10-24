@@ -82,6 +82,7 @@ const productSchema = z.object({
   image: z.string(),
   gallery: z.array(z.string()),
   videoPoster: z.string(),
+  video: z.string().url().optional(),
   durationSec: z.number().int().nonnegative(),
   shots: z.number().int().nonnegative(),
   heightM: z.number().nonnegative(),

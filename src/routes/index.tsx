@@ -139,7 +139,8 @@ function Home() {
               const p = cat.products.find((x) => x.id === r.productId)!;
               return (
                 <Link key={r.id} to="/product/$slug" params={{ slug: p.slug }} className="relative w-44 shrink-0 snap-start overflow-hidden rounded-2xl">
-                  <img src={r.media?.[0]?.src ?? p.image} alt={`Customer clip of ${p.name}`} loading="lazy" className="aspect-[9/16] w-full object-cover" />
+                  {/* Poster only — the clip itself plays on the product page, so the homepage stays light. */}
+                  <img src={p.image} alt={`Customer clip of ${p.name}`} loading="lazy" className="aspect-[9/16] w-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-night via-transparent" />
                   <Play className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/50 p-2.5 backdrop-blur" />
                   <div className="absolute inset-x-0 bottom-0 p-3 text-xs">

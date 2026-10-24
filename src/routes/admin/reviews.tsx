@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BadgeCheck, Play } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 import { useState } from "react";
 import { PageHeader, Panel } from "@/components/admin/ui";
 import { Stars } from "@/components/site/ProductCard";
+import { ReviewMediaThumb } from "@/components/site/ReviewMedia";
 import { formatDate } from "@/components/site/forms";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -73,16 +74,7 @@ function Reviews() {
                   {r.media && (
                     <div className="mt-2 flex gap-2">
                       {r.media.map((m, i) => (
-                        <div key={i} className="relative h-14 w-14 overflow-hidden rounded-lg">
-                          <img
-                            src={m.src}
-                            alt="Customer upload"
-                            className="h-full w-full object-cover"
-                          />
-                          {m.type === "video" && (
-                            <Play className="absolute inset-0 m-auto h-5 w-5" />
-                          )}
-                        </div>
+                        <ReviewMediaThumb key={i} m={m} poster={p?.image} className="h-14 w-14" />
                       ))}
                     </div>
                   )}

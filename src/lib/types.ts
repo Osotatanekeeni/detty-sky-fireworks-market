@@ -19,6 +19,8 @@ export interface Product {
   image: string;
   gallery: string[];
   videoPoster: string;
+  /** Short muted MP4/WebM clip in R2 (≤ 8 MB). Loaded only when the shopper taps play. */
+  video?: string;
   durationSec: number;
   shots: number;
   heightM: number;

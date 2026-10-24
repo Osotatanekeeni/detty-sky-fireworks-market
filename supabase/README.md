@@ -1,4 +1,4 @@
-# Backend setup (Supabase, Paystack, Resend)
+# Backend setup (Supabase, Paystack, Resend, R2)
 
 One-time setup for a new environment (dev first, then prod).
 
@@ -53,6 +53,24 @@ Add and verify your domain (DNS records) at resend.com, then set `RESEND_API_KEY
 `EMAIL_FROM`. Emails sent: order receipt, Dispatched / Out for delivery / Delivered, and bulk
 quote replies (with a Paystack link once a quote is converted).
 
+## Cloudflare R2 (product & review media)
+
+1. R2 → Create bucket `detty-media`. Settings → Public access: connect a custom domain
+   (e.g. `media.dettysky.ng`; r2.dev is fine for testing) → that's `R2_PUBLIC_URL`.
+2. Settings → CORS policy, so browsers can upload straight to R2:
+
+   ```json
+   [{ "AllowedOrigins": ["http://localhost:8080", "https://dettysky.ng"],
+      "AllowedMethods": ["PUT"], "AllowedHeaders": ["content-type"], "MaxAgeSeconds": 3600 }]
+   ```
+3. R2 → Manage API tokens → Create token with *Object Read & Write* on this bucket → copy the
+   Access Key ID / Secret into `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`; `R2_ACCOUNT_ID` is in
+   the R2 overview sidebar.
+
+Limits (enforced server-side and by the signed URL): product photos 5 MB (JPG/PNG/WebP), product
+videos 8 MB (MP4/WebM), review photos 5 MB, review videos 20 MB. Re-encode product clips to
+720p, muted, a few seconds (`ffmpeg -i in.mov -vf scale=-2:720 -an -c:v libx264 -crf 28 out.mp4`).
+
 Production: set the `VITE_*` values at build time and the server values as Cloudflare Worker
 secrets (`npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`, same for `PAYSTACK_SECRET_KEY`,
-`RESEND_API_KEY`), plus `SITE_URL` and `EMAIL_FROM` as plain variables.
+`RESEND_API_KEY`, `R2_SECRET_ACCESS_KEY`, `R2_ACCESS_KEY_ID`), plus `SITE_URL` and `EMAIL_FROM` as plain variables.
