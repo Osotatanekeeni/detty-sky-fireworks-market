@@ -68,7 +68,7 @@ src/
     api/paystack/webhook  POST: verify x-paystack-signature → confirm_payment
     sitemap[.]xml, robots[.]txt   server routes (dynamic, from the catalogue)
     index, shop, product.$slug, bundles, cart      ← Lovable
-    checkout, order.$id, track, account, bulk, safety, delivery
+    checkout, order.$id, track, account, bulk, delivery
     admin.tsx             admin layout + guard;  admin/*  dashboard, orders, products, inventory,
                           quotes, delivery, availability (kill switch), marketing, reviews, login
   components/site/        storefront components (Shell, ProductCard, Fireworks canvas, Countdown,
