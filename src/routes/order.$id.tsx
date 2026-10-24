@@ -13,6 +13,7 @@ import { retryPayment, verifyPayment } from "@/lib/checkout.functions";
 import { getOrder } from "@/lib/orders.functions";
 import { trackingPhone } from "@/lib/tracking";
 import { formatNaira } from "@/lib/pricing";
+import { Turnstile, turnstileReady } from "@/components/site/Turnstile";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
@@ -251,6 +252,8 @@ function CreateAccount({ order }: { order: Order }) {
   const { signUp } = useAuth();
   const [pw, setPw] = useState("");
   const [sent, setSent] = useState(false);
+  const [captcha, setCaptcha] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   if (sent)
     return (
       <section className="glass rounded-3xl p-5 shadow-glow">
@@ -279,7 +282,9 @@ function CreateAccount({ order }: { order: Order }) {
             password: pw,
             name: order.customer.name,
             phone: order.customer.phone,
+            captchaToken: captcha,
           });
+          setCaptchaReset((n) => n + 1);
           if ("error" in r) toast.error(r.error);
           else if (r.needsConfirmation) setSent(true);
           else toast.success("Account created — welcome to Detty Sky!");
@@ -296,7 +301,8 @@ function CreateAccount({ order }: { order: Order }) {
             className={inputClass}
           />
         </Field>
-        <Button type="submit" variant="gold" className="w-full">
+        <Turnstile onToken={setCaptcha} resetKey={captchaReset} action="signup" />
+        <Button type="submit" variant="gold" className="w-full" disabled={!turnstileReady(captcha)}>
           Create account
         </Button>
       </form>

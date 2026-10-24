@@ -12,25 +12,69 @@ import { useStore } from "@/lib/store";
 import { DeliverTo } from "@/components/site/Shell";
 import { loadCatalogue, useCatalogue } from "@/lib/catalogue";
 import { formatArrives } from "@/lib/db-map";
+import { absolute } from "@/lib/site";
 import { isCategoryBlocked } from "@/lib/services";
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params, context }) => {
-    const p = getProduct(await loadCatalogue(context.queryClient), params.slug);
+    const cat = await loadCatalogue(context.queryClient);
+    const p = getProduct(cat, params.slug);
     if (!p) throw notFound();
-    return { p };
+    return { p, rating: ratingFor(cat, p.id) };
   },
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.p.name} — Detty Sky` },
-          { name: "description", content: loaderData.p.description },
-          { property: "og:title", content: `${loaderData.p.name} — Detty Sky` },
-          { property: "og:description", content: loaderData.p.description },
-          { property: "og:type", content: "product" },
-        ]
-      : [{ title: "Product unavailable — Detty Sky" }, { name: "robots", content: "noindex" }],
-  }),
+  head: ({ loaderData }) => {
+    if (!loaderData)
+      return { meta: [{ title: "Product unavailable — Detty Sky" }, { name: "robots", content: "noindex" }] };
+    const { p, rating } = loaderData;
+    const url = absolute(`/product/${p.slug}`);
+    const image = absolute(p.image);
+    const inStock = !!p.preorder || p.stock - (p.reserved ?? 0) > 0;
+    // https://developers.google.com/search/docs/appearance/structured-data/product
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: p.name,
+      description: p.description,
+      image: [...new Set([p.image, ...p.gallery])].map(absolute),
+      sku: p.slug,
+      category: getCategory(p.category)?.name,
+      brand: { "@type": "Brand", name: "Detty Sky" },
+      offers: {
+        "@type": "Offer",
+        url,
+        priceCurrency: "NGN",
+        price: p.price,
+        availability: p.preorder
+          ? "https://schema.org/PreOrder"
+          : inStock
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+        areaServed: ["Akwa Ibom", "Bayelsa", "Cross River", "Delta", "Edo", "Rivers"].map((name) => ({
+          "@type": "State",
+          name,
+        })),
+      },
+      ...(rating.count
+        ? { aggregateRating: { "@type": "AggregateRating", ratingValue: rating.avg.toFixed(1), reviewCount: rating.count } }
+        : {}),
+    };
+    return {
+      meta: [
+        { title: `${p.name} — Detty Sky` },
+        { name: "description", content: p.description },
+        { property: "og:title", content: `${p.name} — Detty Sky` },
+        { property: "og:description", content: p.description },
+        { property: "og:type", content: "product" },
+        { property: "og:url", content: url },
+        { property: "og:image", content: image },
+        { name: "twitter:image", content: image },
+        { property: "product:price:amount", content: String(p.price) },
+        { property: "product:price:currency", content: "NGN" },
+      ],
+      links: [{ rel: "canonical", href: url }],
+      scripts: [{ type: "application/ld+json", children: JSON.stringify(jsonLd) }],
+    };
+  },
   component: ProductPage,
 });
 

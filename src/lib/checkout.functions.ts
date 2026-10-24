@@ -95,6 +95,22 @@ export const createCheckout = createServerFn({ method: "POST" })
       problems.push("Some items in your cart are no longer available.");
     if (problems.length) return { ok: false as const, problems };
 
+    // Unpaid orders hold stock for 30 minutes, so cap how many one buyer can have open — stops
+    // anyone (or a bot) from locking up December stock with checkouts they never pay for.
+    const { count: open } = await db
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending_payment")
+      .gt("reserved_until", new Date().toISOString())
+      .or(`email.eq."${data.contact.email.toLowerCase()}",phone.eq."${data.contact.phone}"`);
+    if ((open ?? 0) >= 3)
+      return {
+        ok: false as const,
+        problems: [
+          "You have unpaid orders waiting. Pay one from its order page, or try again in 30 minutes.",
+        ],
+      };
+
     const subtotal = toKobo(priced.subtotal);
     const bulk = toKobo(priced.bulkDiscount);
     const codeKobo = toKobo(priced.code?.amount ?? 0);

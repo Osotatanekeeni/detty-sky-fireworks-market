@@ -66,6 +66,7 @@ Never edit `src/routeTree.gen.ts` by hand. Don't add plugins to `vite.config.ts`
 src/
   routes/                 file routes (see src/routes/README.md for conventions)
     api/paystack/webhook  POST: verify x-paystack-signature → confirm_payment
+    sitemap[.]xml, robots[.]txt   server routes (dynamic, from the catalogue)
     index, shop, product.$slug, bundles, cart      ← Lovable
     checkout, order.$id, track, account, bulk, safety, delivery
     admin.tsx             admin layout + guard;  admin/*  dashboard, orders, products, inventory,
@@ -103,11 +104,15 @@ src/
     r2.server.ts          R2 presigned PUT (aws4fetch), UPLOAD_RULES (types/sizes per kind)
     uploads.functions.ts  createUpload: product media (admin), review media (signed-in, own folder)
     uploads.ts            uploadFile(kind, file) → public URL (browser)
+    turnstile.server.ts   verifyTurnstile (off when TURNSTILE_SECRET_KEY unset)
+    site.ts               SITE_URL / absolute() for SEO tags
     checkout.ts           priceCart(): the ONE pricing function (bulk tiers, codes, delivery,
                           kill switch, stock - reserved). Used by cart, checkout and placeOrder
     pricing.ts            tier maths + formatNaira
     store.tsx             per-browser state: cart, wishlist, "deliver to" state, order → payment ref
 scripts/seed-products.ts  data.ts catalogue → idempotent SQL (pipe into psql)
+scripts/loadtest/         oversell.sql (pgbench race on place_order), k6-december.js
+LAUNCH.md                 owner's go-live checklist + December runbook
 supabase/
   README.md                            project setup, step by step
   migrations/20261024000000_init.sql   full schema, RLS, stock/payment functions (tested on PG16)
@@ -224,7 +229,7 @@ Work phase by phase on a branch per phase. Keep the mock working until its repla
   route, Resend emails (receipt, status changes, quote replies), pg_cron for holds. Admin actions
   become server fns. Delete `mock-db.ts`.
 - [x] **Phase 3 — Media.** (Code done; create the bucket — supabase/README.md → R2.) R2 presigned uploads for product videos/images and review media.
-- [ ] **Phase 4 — Launch hardening.** Cloudflare Turnstile on bulk-quote + auth forms, rate
+- [x] **Phase 4 — Launch hardening.** (Code done; the account/dashboard steps are in LAUNCH.md.) Cloudflare Turnstile on bulk-quote + auth forms, rate
   limits, sitemap + Product JSON-LD for SEO, OG images, error monitoring, analytics, Paystack live
   keys, Workers Paid + Supabase Pro, backups, load test the checkout for the December spike.
 

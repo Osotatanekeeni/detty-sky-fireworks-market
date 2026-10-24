@@ -3,6 +3,7 @@ import { Lock, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AdminField, adminInput } from "@/components/admin/ui";
 import { Button } from "@/components/ui/button";
+import { Turnstile, turnstileReady } from "@/components/site/Turnstile";
 import { getViewer } from "@/lib/auth.functions";
 import { supabaseBrowser } from "@/lib/supabase.browser";
 
@@ -26,6 +27,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(denied ? "That account isn't an admin." : "");
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <form
@@ -34,7 +37,12 @@ function Login() {
           e.preventDefault();
           setBusy(true);
           const sb = supabaseBrowser();
-          const { error: err } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+          const { error: err } = await sb.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+            ...(captcha ? { options: { captchaToken: captcha } } : {}),
+          });
+          setCaptchaReset((n) => n + 1);
           if (err) {
             setBusy(false);
             setError(/invalid login/i.test(err.message) ? "Wrong email or password." : err.message);
@@ -91,7 +99,13 @@ function Login() {
               {error}
             </p>
           )}
-          <Button type="submit" variant="gold" className="w-full" disabled={busy}>
+          <Turnstile onToken={setCaptcha} resetKey={captchaReset} action="admin-login" />
+          <Button
+            type="submit"
+            variant="gold"
+            className="w-full"
+            disabled={busy || !turnstileReady(captcha)}
+          >
             <Lock /> Sign in
           </Button>
         </div>

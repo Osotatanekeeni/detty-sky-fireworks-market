@@ -13,7 +13,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback } from "react";
-import { fetchCatalogue } from "./catalogue.server";
+import { cachedCatalogue } from "./catalogue.server";
 import { supabasePublic } from "./supabase.server";
 import type {
   Banner,
@@ -38,9 +38,9 @@ export interface Catalogue {
   campaign: Campaign;
 }
 
-export const getCatalogue = createServerFn({ method: "GET" }).handler((): Promise<Catalogue> =>
-  fetchCatalogue(supabasePublic()),
-);
+export const getCatalogue = createServerFn({ method: "GET" })
+  .validator((d: { fresh?: boolean } | undefined) => ({ fresh: d?.fresh === true }))
+  .handler(({ data }): Promise<Catalogue> => cachedCatalogue(supabasePublic(), data.fresh));
 
 export const catalogueQuery = queryOptions({
   queryKey: ["catalogue"],
@@ -59,7 +59,7 @@ export function useRefreshCatalogue() {
   const qc = useQueryClient();
   const router = useRouter();
   return useCallback(async () => {
-    await qc.invalidateQueries({ queryKey: catalogueQuery.queryKey });
+    qc.setQueryData(catalogueQuery.queryKey, await getCatalogue({ data: { fresh: true } }));
     await router.invalidate();
   }, [qc, router]);
 }

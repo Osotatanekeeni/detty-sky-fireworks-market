@@ -12,6 +12,7 @@ import { STATES } from "./data";
 import { ORDER_SELECT, orderFromRow, type OrderRow } from "./db-map";
 import { loadOrder } from "./payments.server";
 import { supabaseForRequest, supabasePublic, supabaseService } from "./supabase.server";
+import { verifyTurnstile } from "./turnstile.server";
 import type { Order } from "./types";
 
 const digits = (s: string) => s.replace(/\D/g, "").slice(-10);
@@ -82,13 +83,23 @@ const quoteSchema = z.object({
   phone: z.string().trim().min(7).max(30),
   email: z.string().trim().email().max(200).optional(),
   notes: z.string().max(2000).default(""),
+  turnstileToken: z.string().max(4096).optional(),
 });
 export type QuoteRequest = z.input<typeof quoteSchema>;
 
-/** Anyone can submit (RLS allows anon insert). Phase 4 adds Turnstile + a rate limit. */
+/** Anyone can submit (RLS allows anon insert) — behind Turnstile and 3 per phone per day. */
 export const submitQuote = createServerFn({ method: "POST" })
   .validator((d: QuoteRequest) => quoteSchema.parse(d))
   .handler(async ({ data }) => {
+    await verifyTurnstile(data.turnstileToken);
+    const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const { count } = await supabaseService()
+      .from("bulk_quotes")
+      .select("id", { count: "exact", head: true })
+      .eq("phone", data.phone)
+      .gte("created_at", since);
+    if ((count ?? 0) >= 3)
+      throw new Error("We've already got your requests — we'll reply within 24 hours. Chat with us on WhatsApp if it's urgent.");
     // anon can INSERT but not SELECT a quote, so no .select() here.
     const { error } = await supabasePublic()
       .from("bulk_quotes")

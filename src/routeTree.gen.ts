@@ -17,8 +17,10 @@ import { Route as BundlesRouteImport } from './routes/bundles'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DeliveryRouteImport } from './routes/delivery'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as ShopRouteImport } from './routes/shop'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAvailabilityRouteImport } from './routes/admin/availability'
@@ -75,6 +77,11 @@ const DeliveryRoute = DeliveryRouteImport.update({
   path: '/delivery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SafetyRoute = SafetyRouteImport.update({
   id: '/safety',
   path: '/safety',
@@ -83,6 +90,11 @@ const SafetyRoute = SafetyRouteImport.update({
 const ShopRoute = ShopRouteImport.update({
   id: '/shop',
   path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrackRoute = TrackRouteImport.update({
@@ -170,8 +182,10 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/delivery': typeof AdminDeliveryRoute
@@ -196,8 +210,10 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/delivery': typeof AdminDeliveryRoute
@@ -224,8 +240,10 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/delivery': typeof AdminDeliveryRoute
@@ -253,8 +271,10 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/delivery'
+    | '/robots.txt'
     | '/safety'
     | '/shop'
+    | '/sitemap.xml'
     | '/track'
     | '/admin/availability'
     | '/admin/delivery'
@@ -279,8 +299,10 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/delivery'
+    | '/robots.txt'
     | '/safety'
     | '/shop'
+    | '/sitemap.xml'
     | '/track'
     | '/admin/availability'
     | '/admin/delivery'
@@ -306,8 +328,10 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/delivery'
+    | '/robots.txt'
     | '/safety'
     | '/shop'
+    | '/sitemap.xml'
     | '/track'
     | '/admin/availability'
     | '/admin/delivery'
@@ -334,8 +358,10 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
   DeliveryRoute: typeof DeliveryRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SafetyRoute: typeof SafetyRoute
   ShopRoute: typeof ShopRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TrackRoute: typeof TrackRoute
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
@@ -400,6 +426,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeliveryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/safety': {
       id: '/safety'
       path: '/safety'
@@ -412,6 +445,13 @@ declare module '@tanstack/react-router' {
       path: '/shop'
       fullPath: '/shop'
       preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/track': {
@@ -561,8 +601,10 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
   DeliveryRoute: DeliveryRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SafetyRoute: SafetyRoute,
   ShopRoute: ShopRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TrackRoute: TrackRoute,
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,

@@ -67,3 +67,20 @@ export async function fetchCatalogue(db: SupabaseClient): Promise<Catalogue> {
     };
   }
 }
+
+// Per-isolate cache for the public catalogue. Every SSR page needs it, so without this each
+// page view would cost 7 Supabase queries. 15 s keeps admin edits near-instant (the admin's own
+// refresh bypasses it) while absorbing the New Year's Eve spike. Checkout never uses it — it
+// prices from fresh rows.
+const TTL_MS = 15_000;
+let cached: { at: number; value: Promise<Catalogue> } | undefined;
+
+export function cachedCatalogue(db: SupabaseClient, fresh = false): Promise<Catalogue> {
+  if (!fresh && cached && Date.now() - cached.at < TTL_MS) return cached.value;
+  const value = fetchCatalogue(db);
+  cached = { at: Date.now(), value };
+  value.catch(() => {
+    if (cached?.value === value) cached = undefined; // don't cache failures
+  });
+  return value;
+}

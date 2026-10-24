@@ -16,12 +16,13 @@ export interface Profile {
 interface Auth {
   /** undefined while the session is loading (SSR and first paint), null when signed out. */
   user: Profile | null | undefined;
-  signIn: (email: string, password: string) => Promise<string | null>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<string | null>;
   signUp: (v: {
     email: string;
     password: string;
     name: string;
     phone: string;
+    captchaToken?: string | undefined;
   }) => Promise<{ error: string } | { needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
   updateProfile: (v: { name: string; phone: string }) => Promise<string | null>;
@@ -68,21 +69,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  // captchaToken: required once Turnstile is switched on in Supabase → Auth → Attack Protection.
+  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
     const { error } = await supabaseBrowser().auth.signInWithPassword({
       email: email.trim(),
       password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
     return error ? friendly(error.message) : null;
   }, []);
 
-  const signUp = useCallback<Auth["signUp"]>(async ({ email, password, name, phone }) => {
+  const signUp = useCallback<Auth["signUp"]>(async ({ email, password, name, phone, captchaToken }) => {
     const { data, error } = await supabaseBrowser().auth.signUp({
       email: email.trim(),
       password,
       options: {
         data: { full_name: name.trim(), phone: phone.trim() },
         emailRedirectTo: `${window.location.origin}/account`,
+        ...(captchaToken ? { captchaToken } : {}),
       },
     });
     if (error) return { error: friendly(error.message) };

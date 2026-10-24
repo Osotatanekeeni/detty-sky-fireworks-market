@@ -15,6 +15,7 @@ import {
 } from "@/components/site/forms";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Turnstile, turnstileReady } from "@/components/site/Turnstile";
 import { submitQuote } from "@/lib/orders.functions";
 import type { StateName } from "@/lib/types";
 
@@ -96,6 +97,8 @@ function Bulk() {
   };
 
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = schema.safeParse(f);
@@ -107,11 +110,14 @@ function Bulk() {
     const { email, ...rest } = r.data;
     setBusy(true);
     try {
-      await submitQuote({ data: { ...rest, ...(email ? { email } : {}) } });
+      await submitQuote({
+        data: { ...rest, ...(email ? { email } : {}), ...(captcha ? { turnstileToken: captcha } : {}) },
+      });
       setSentId("sent");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't send your request");
+      setCaptchaReset((n) => n + 1); // tokens are single-use
     } finally {
       setBusy(false);
     }
@@ -294,7 +300,14 @@ function Bulk() {
                 placeholder="Delivery time window, invoice needs, venue access…"
               />
             </Field>
-            <Button type="submit" variant="gold" size="lg" className="w-full sm:w-auto">
+            <Turnstile onToken={setCaptcha} resetKey={captchaReset} action="bulk-quote" />
+            <Button
+              type="submit"
+              variant="gold"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={busy || !turnstileReady(captcha)}
+            >
               Send request
             </Button>
           </form>

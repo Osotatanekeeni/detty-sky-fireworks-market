@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { myOrders, myReviews, submitReview } from "@/lib/orders.functions";
 import { useAddresses } from "@/lib/addresses";
+import { Turnstile, turnstileReady } from "@/components/site/Turnstile";
 import { useAuth } from "@/lib/auth";
 import { uploadFile } from "@/lib/uploads";
 import { useCatalogue } from "@/lib/catalogue";
@@ -607,6 +608,8 @@ function AuthForms() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [sentTo, setSentTo] = useState("");
+  const [captcha, setCaptcha] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "up") {
@@ -616,7 +619,8 @@ function AuthForms() {
         return;
       }
       setBusy(true);
-      const res = await signUp(r.data);
+      const res = await signUp({ ...r.data, captchaToken: captcha });
+      setCaptchaReset((n) => n + 1);
       setBusy(false);
       if ("error" in res) toast.error(res.error);
       else if (res.needsConfirmation) setSentTo(r.data.email);
@@ -633,7 +637,8 @@ function AuthForms() {
         return;
       }
       setBusy(true);
-      const err = await signIn(r.data.email, r.data.password);
+      const err = await signIn(r.data.email, r.data.password, captcha);
+      setCaptchaReset((n) => n + 1);
       setBusy(false);
       if (err) toast.error(err);
       else toast.success("Signed in");
@@ -697,7 +702,14 @@ function AuthForms() {
             "password",
             mode === "in" ? "current-password" : "new-password",
           )}
-          <Button type="submit" variant="gold" size="lg" className="w-full" disabled={busy}>
+          <Turnstile onToken={setCaptcha} resetKey={captchaReset} action="account" />
+          <Button
+            type="submit"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            disabled={busy || !turnstileReady(captcha)}
+          >
             {mode === "in" ? "Sign in" : "Create account"}
           </Button>
         </form>
