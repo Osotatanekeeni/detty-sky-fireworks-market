@@ -18,7 +18,6 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DeliveryRouteImport } from './routes/delivery'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
-import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TrackRouteImport } from './routes/track'
@@ -80,11 +79,6 @@ const DeliveryRoute = DeliveryRouteImport.update({
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SafetyRoute = SafetyRouteImport.update({
-  id: '/safety',
-  path: '/safety',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShopRoute = ShopRouteImport.update({
@@ -183,7 +177,6 @@ export interface FileRoutesByFullPath {
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
@@ -211,7 +204,6 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
@@ -241,7 +233,6 @@ export interface FileRoutesById {
   '/checkout': typeof CheckoutRoute
   '/delivery': typeof DeliveryRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/safety': typeof SafetyRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/track': typeof TrackRoute
@@ -272,7 +263,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/delivery'
     | '/robots.txt'
-    | '/safety'
     | '/shop'
     | '/sitemap.xml'
     | '/track'
@@ -300,7 +290,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/delivery'
     | '/robots.txt'
-    | '/safety'
     | '/shop'
     | '/sitemap.xml'
     | '/track'
@@ -329,7 +318,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/delivery'
     | '/robots.txt'
-    | '/safety'
     | '/shop'
     | '/sitemap.xml'
     | '/track'
@@ -359,7 +347,6 @@ export interface RootRouteChildren {
   CheckoutRoute: typeof CheckoutRoute
   DeliveryRoute: typeof DeliveryRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
-  SafetyRoute: typeof SafetyRoute
   ShopRoute: typeof ShopRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TrackRoute: typeof TrackRoute
@@ -431,13 +418,6 @@ declare module '@tanstack/react-router' {
       path: '/robots.txt'
       fullPath: '/robots.txt'
       preLoaderRoute: typeof RobotsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/safety': {
-      id: '/safety'
-      path: '/safety'
-      fullPath: '/safety'
-      preLoaderRoute: typeof SafetyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shop': {
@@ -602,7 +582,6 @@ const rootRouteChildren: RootRouteChildren = {
   CheckoutRoute: CheckoutRoute,
   DeliveryRoute: DeliveryRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
-  SafetyRoute: SafetyRoute,
   ShopRoute: ShopRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TrackRoute: TrackRoute,

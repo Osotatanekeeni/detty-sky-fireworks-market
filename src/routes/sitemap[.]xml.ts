@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { fetchCatalogue } from "@/lib/catalogue.server";
 import { supabasePublic } from "@/lib/supabase.server";
 
-const STATIC = ["/", "/shop", "/bundles", "/bulk", "/delivery", "/safety", "/track"];
+const STATIC = ["/", "/shop", "/bundles", "/bulk", "/delivery", "/track"];
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {

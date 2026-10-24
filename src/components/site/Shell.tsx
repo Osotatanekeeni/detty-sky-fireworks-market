@@ -106,7 +106,6 @@ function Header() {
           <Link to="/shop" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Shop</Link>
           <Link to="/bundles" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Bundles</Link>
           <Link to="/bulk" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Bulk orders</Link>
-          <Link to="/safety" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Safety</Link>
           <Link to="/delivery" className="hover:text-gold" activeProps={{ className: "text-gold" }}>Delivery</Link>
         </nav>
         <div className="ml-auto hidden w-72 md:block"><InstantSearch /></div>
@@ -149,7 +148,7 @@ function Header() {
               </div>
             </div>
             <nav className="grid gap-3 font-display text-xl">
-              {([["/shop", "Shop all"], ["/bundles", "Bundles"], ["/bulk", "Bulk quote"], ["/safety", "Safety guide"], ["/delivery", "Delivery info"], ["/track", "Track an order"], ["/account", "My account"]] as const).map(([to, l]) => (
+              {([["/shop", "Shop all"], ["/bundles", "Bundles"], ["/bulk", "Bulk quote"], ["/delivery", "Delivery info"], ["/track", "Track an order"], ["/account", "My account"]] as const).map(([to, l]) => (
                 <Link key={to} to={to} onClick={() => setOpen(false)}>{l}</Link>
               ))}
             </nav>
@@ -182,7 +181,6 @@ function Footer() {
         <div>
           <h3 className="mb-3 text-sm">Help</h3>
           <ul className="grid gap-2 text-sm text-muted-foreground">
-            <li><Link to="/safety" className="hover:text-gold">Safety guide</Link></li>
             <li><Link to="/delivery" className="hover:text-gold">Delivery info</Link></li>
             <li><Link to="/bulk" className="hover:text-gold">Bulk quotes</Link></li>
             <li><Link to="/track" className="hover:text-gold">Track my order</Link></li>
