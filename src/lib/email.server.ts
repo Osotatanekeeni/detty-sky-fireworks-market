@@ -45,7 +45,7 @@ function layout(title: string, body: string) {
 <p style="font-size:20px;font-weight:bold;margin:0 0 24px">Detty<span style="color:#f5c84c">Sky</span></p>
 <h1 style="font-size:22px;margin:0 0 12px">${title}</h1>
 ${body}
-<p style="margin-top:32px;font-size:12px;color:#9a97a8">Please use fireworks responsibly. Adults 18+ only.<br>Detty Sky · Port Harcourt</p>
+<p style="margin-top:32px;font-size:12px;color:#9a97a8">Please use fireworks responsibly, with adult supervision.<br>Detty Sky · Port Harcourt</p>
 </div></body></html>`;
 }
 
@@ -62,7 +62,7 @@ export function sendReceipt(o: Order) {
   const money = (label: string, v: number) =>
     `<tr><td style="padding:4px 0;color:#9a97a8">${label}</td><td style="text-align:right">${formatNaira(v)}</td></tr>`;
   const html = layout(
-    `Your sky is booked, ${esc(o.customer.name.split(" ")[0] ?? "")}! 🎆`,
+    `Your sky is booked, ${esc(o.customer.name.split(" ")[0] ?? "")}!`,
     `<p>We've received your payment for order <strong>${o.id}</strong> and we're packing it now.</p>
 <table style="width:100%;border-collapse:collapse;font-size:14px">${rows}
 ${money("Subtotal", o.subtotal)}${o.discount ? money("Bulk discount", -o.discount) : ""}${o.codeDiscount ? money(`Code ${esc(o.code ?? "")}`, -o.codeDiscount) : ""}${money("Delivery", o.deliveryFee)}
@@ -90,7 +90,7 @@ export function sendStatusUpdate(o: Order) {
   return send(
     o.customer.email,
     `Order ${o.id}: ${o.status}`,
-    layout(`${o.status} 🚚`, `<p>${line}</p><p>Order <strong>${o.id}</strong>.</p>${extra}`),
+    layout(o.status, `<p>${line}</p><p>Order <strong>${o.id}</strong>.</p>${extra}`),
   );
 }
 

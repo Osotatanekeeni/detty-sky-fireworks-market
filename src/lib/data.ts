@@ -21,11 +21,11 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const OCCASIONS: Occasion[] = [
-  { slug: "christmas", name: "Christmas", blurb: "Make your December detty", emoji: "🎄" },
-  { slug: "new-year", name: "New Year Countdown", blurb: "3, 2, 1… light am!", emoji: "🎆" },
-  { slug: "wedding-entrance", name: "Wedding Entrance", blurb: "Light up the owambe", emoji: "💍" },
-  { slug: "birthday", name: "Birthday", blurb: "Another year, more sparkle", emoji: "🎂" },
-  { slug: "church-crossover", name: "Church Crossover Night", blurb: "Cross over in glory", emoji: "⛪" },
+  { slug: "christmas", name: "Christmas", blurb: "Make your December detty" },
+  { slug: "new-year", name: "New Year Countdown", blurb: "3, 2, 1… light am!" },
+  { slug: "wedding-entrance", name: "Wedding Entrance", blurb: "Make the grand entrance" },
+  { slug: "birthday", name: "Birthday", blurb: "Another year, more sparkle" },
+  { slug: "church-crossover", name: "Church Crossover Night", blurb: "Cross over in glory" },
 ];
 
 const IMG: Record<CategorySlug, string> = {
@@ -37,7 +37,7 @@ type Raw = [string, CategorySlug, OccasionSlug[], number, number, number, number
 
 const RAW: Raw[] = [
   ["Royal Crown 100", "aerial-cakes", ["new-year", "church-crossover"], 85000, 60, 100, 40, "Loud", ["Gold", "Magenta"], 18, "2026-12-20", true],
-  ["Owambe King 49", "aerial-cakes", ["wedding-entrance", "birthday"], 42000, 35, 49, 30, "Loud", ["Gold", "Emerald"], 24, undefined, true],
+  ["Crossover King 49", "aerial-cakes", ["wedding-entrance", "birthday"], 42000, 35, 49, 30, "Loud", ["Gold", "Emerald"], 24, undefined, true],
   ["Lagoon Lights 25", "aerial-cakes", ["christmas", "birthday"], 22500, 25, 25, 25, "Medium", ["Purple", "Silver"], 40],
   ["Midnight Thunder 150", "aerial-cakes", ["new-year"], 135000, 90, 150, 45, "Loud", ["Red", "Gold", "Blue"], 6, "2026-12-22"],
   ["Calabar Carnival 36", "aerial-cakes", ["christmas", "new-year"], 36000, 30, 36, 30, "Medium", ["Orange", "Green"], 30],
@@ -86,7 +86,7 @@ const pid = (slug: string) => PRODUCTS.find((p) => p.slug === slug)!.id;
 export const BUNDLES: Bundle[] = [
   { id: "b1", slug: "new-year-countdown-pack", name: "New Year Countdown Pack", tagline: "Everything for midnight", image: cake,
     items: [{ productId: pid("royal-crown-100"), qty: 1 }, { productId: pid("sky-blast-rockets-5"), qty: 2 }, { productId: pid("gold-sparklers-36cm-10"), qty: 3 }], price: 105000 },
-  { id: "b2", slug: "owambe-pack", name: "Owambe Pack", tagline: "Light up the owambe", image: smoke,
+  { id: "b2", slug: "christmas-party-pack", name: "Christmas Party Pack", tagline: "Colour for the Christmas compound", image: smoke,
     items: [{ productId: pid("rainbow-smoke-bombs-5"), qty: 2 }, { productId: pid("naira-rain-cannon"), qty: 4 }, { productId: pid("golden-rain-fountain"), qty: 2 }], price: 69000 },
   { id: "b3", slug: "birthday-glow-pack", name: "Birthday Glow Pack", tagline: "Blow candles, then the sky", image: sparkler,
     items: [{ productId: pid("number-sparklers-0-9"), qty: 2 }, { productId: pid("lagoon-lights-25"), qty: 1 }, { productId: pid("gold-foil-confetti-cannon-60cm"), qty: 2 }], price: 38000 },
@@ -110,7 +110,7 @@ export const CATEGORY_STATE_BLOCKS: Partial<Record<StateName, CategorySlug[]>> =
 
 export const DISCOUNT_CODES: DiscountCode[] = [
   { code: "DETTY10", pct: 10, active: true, uses: 142 },
-  { code: "OWAMBE5", pct: 5, active: true, uses: 61 },
+  { code: "XMAS5", pct: 5, active: true, uses: 61 },
   { code: "XMAS2025", pct: 15, active: false, uses: 380 },
 ];
 
@@ -118,12 +118,12 @@ export const WHATSAPP_NUMBER = "2348000000000";
 
 export const BANNERS: Banner[] = [
   { id: "bn1", title: "Crossover pre-orders are open", subtitle: "Lock in your church and family stock before December prices climb.", cta: "Shop pre-orders", href: "/shop?preorder=true", tone: "royal", active: true },
-  { id: "bn2", title: "Owambe season? We dey for you", subtitle: "Sparklers, smoke and cold sparks for the grand entrance.", cta: "Wedding effects", href: "/shop?occasion=wedding-entrance", tone: "party", active: true },
+  { id: "bn2", title: "Christmas in the compound? We dey for you", subtitle: "Sparklers, smoke and cold sparks for Christmas Day and Boxing Day.", cta: "Christmas effects", href: "/shop?occasion=christmas", tone: "party", active: true },
   { id: "bn3", title: "Buying for a church or event?", subtitle: "Get a custom bulk quote within 24 hours.", cta: "Request a quote", href: "/bulk", tone: "gold", active: false },
 ];
 
 export const CAMPAIGN: Campaign = {
-  announcement: "🎆 December pre-orders are open — secure your crossover stock",
+  announcement: "December pre-orders are open — secure your crossover stock",
   preordersOpen: true,
   countdownLabel: "Countdown to New Year · pre-orders close soon",
 };

@@ -5,6 +5,7 @@ import { Countdown } from "@/components/site/Countdown";
 import { Fireworks } from "@/components/site/Fireworks";
 import { ProductGrid, SectionTitle, Stars } from "@/components/site/ProductCard";
 import { CATEGORIES, OCCASIONS } from "@/lib/data";
+import { OCCASION_ICONS } from "@/components/site/occasion-icons";
 import { formatNaira } from "@/lib/pricing";
 import { useCatalogue } from "@/lib/catalogue";
 import { bestSellers, bundleValue } from "@/lib/services";
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Detty Sky — Fireworks Delivered Across the South-South" },
-      { name: "description", content: "Shop aerial cakes, rockets, sparklers and owambe effects. Delivery to Rivers, Akwa Ibom, Bayelsa, Cross River, Delta & Edo." },
+      { name: "description", content: "Shop aerial cakes, rockets, sparklers and party effects. Delivery to Rivers, Akwa Ibom, Bayelsa, Cross River, Delta & Edo." },
       { property: "og:title", content: "Detty Sky — Make Your December Detty" },
       { property: "og:description", content: "Premium fireworks for Christmas, crossover, weddings and birthdays." },
     ],
@@ -62,7 +63,7 @@ function Home() {
             Make your December <span className="text-party-gradient">detty.</span>
           </h1>
           <p className="animate-float-up mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-            From crossover night to the owambe entrance — light up the sky with fireworks delivered to your door.
+            From Christmas Eve to crossover night — light up the sky with fireworks delivered to your door.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild variant="gold" size="lg"><Link to="/shop">Shop Now</Link></Button>
@@ -98,8 +99,8 @@ function Home() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {OCCASIONS.map((o, i) => (
               <Link key={o.slug} to="/shop" search={{ occasion: o.slug }}
-                className="glass group rounded-2xl p-5 transition-all hover:-translate-y-1 hover:shadow-glow">
-                <div className="text-3xl">{o.emoji}</div>
+                className="glass group rounded-2xl p-5 transition-all hover:-translate-y-1 hover:border-gold/50">
+                {(() => { const Icon = OCCASION_ICONS[o.slug]; return <Icon className={`h-8 w-8 ${["text-gold", "text-magenta", "text-ember", "text-emerald", "text-royal"][i]}`} aria-hidden />; })()}
                 <p className="mt-3 font-display text-sm">{o.name}</p>
                 <p className={`text-xs ${["text-gold", "text-magenta", "text-ember", "text-emerald", "text-royal"][i]}`}>{o.blurb}</p>
               </Link>
@@ -156,7 +157,7 @@ function Home() {
 
         <section className="relative overflow-hidden rounded-3xl bg-party-gradient p-8 text-primary-foreground sm:p-12">
           <Users className="h-10 w-10" />
-          <h2 className="mt-4 max-w-xl text-3xl">Buying for a church, hotel or big owambe?</h2>
+          <h2 className="mt-4 max-w-xl text-3xl">Buying for a church, hotel or big December party?</h2>
           <p className="mt-2 max-w-lg font-medium">Bulk pricing from 10 units, custom packs and delivery planning for event planners, clubs and congregations.</p>
           <Button asChild size="lg" className="mt-6 rounded-full bg-night text-foreground hover:bg-night/90"><Link to="/bulk">Request a bulk quote</Link></Button>
         </section>

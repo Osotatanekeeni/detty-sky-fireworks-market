@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Lightbulb, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/pricing";
 import { useCartDetails, useStore } from "@/lib/store";
@@ -23,7 +23,7 @@ function Cart() {
   if (!lines.length)
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <p className="text-5xl">🎆</p>
+        <ShoppingBag className="mx-auto h-12 w-12 text-gold" aria-hidden />
         <h1 className="mt-4 text-2xl">Your cart is empty</h1>
         <p className="mt-2 text-muted-foreground">The sky is waiting. Let's fill it up.</p>
         <Button asChild variant="gold" size="lg" className="mt-6"><Link to="/shop">Start shopping</Link></Button>
@@ -55,7 +55,7 @@ function Cart() {
               </div>
             </li>
           ))}
-          <p className="text-xs text-muted-foreground">💡 Buy 10+ of any item for 5% off, 25+ for 10% off — applied automatically.</p>
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><Lightbulb className="mt-px h-3.5 w-3.5 shrink-0 text-gold" aria-hidden /> Buy 10+ of any item for 5% off, 25+ for 10% off — applied automatically.</p>
         </ul>
         <aside className="glass h-fit rounded-2xl p-5">
           <h2 className="text-lg">Summary</h2>

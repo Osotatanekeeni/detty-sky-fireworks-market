@@ -198,13 +198,13 @@ function ProductPage() {
           </div>
           <DeliverTo className="mt-3" />
           {blocked && <p className="mt-2 rounded-xl border border-ember/50 bg-ember/10 p-3 text-sm">{getCategory(p.category)?.name} can't be delivered to {deliveryState} right now due to local restrictions. Choose another state above or browse other categories.</p>}
-          {t.discount > 0 && <p className="mt-2 text-sm text-emerald">You save {formatNaira(t.discount)} with bulk pricing 🎉</p>}
+          {t.discount > 0 && <p className="mt-2 text-sm text-emerald">You save {formatNaira(t.discount)} with bulk pricing</p>}
           {!soldOut && !p.preorder && p.stock < p.lowStockThreshold && <p className="mt-2 text-sm text-ember">Hurry — only {p.stock} left in stock.</p>}
 
           <details className="glass mt-6 rounded-2xl p-4" open>
             <summary className="flex cursor-pointer items-center gap-2 font-semibold"><ShieldAlert className="h-4 w-4 text-ember" /> Safety instructions</summary>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Adults 18+ only. Read the label before use.</li>
+              <li>Adult supervision required. Read the label before use.</li>
               <li>Place on flat, firm ground at least {Math.max(5, p.heightM / 2)}m from people, cars and buildings.</li>
               <li>Light at arm's length and step back immediately. Never lean over the firework.</li>
               <li>Never relight a dud — wait 20 minutes, then soak in water.</li>

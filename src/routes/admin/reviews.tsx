@@ -110,7 +110,7 @@ function Reviews() {
         {!list.length && (
           <Panel>
             <p className="py-6 text-center text-sm text-muted-foreground">
-              {isPending ? "Loading…" : "Nothing here. 🎉"}
+              {isPending ? "Loading…" : "Nothing here."}
             </p>
           </Panel>
         )}

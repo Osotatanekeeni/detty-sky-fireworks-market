@@ -23,7 +23,7 @@ is the only admin for now.
 - No pro display / show-booking service.
 - Reviews: verified purchases only (tied to a delivered order item), optional photo/video, admin
   approves before publishing.
-- Compliance: 18+ age gate; per-state **category kill switch** (`category_state_blocks`) for when
+- Compliance: **no age gate** (any age can buy — owner decision); per-state **category kill switch** (`category_state_blocks`) for when
   police/state government restrict a product type (e.g. bangers/rockets in Rivers).
 - Notifications: **email only** for now (Resend). No SMS/WhatsApp messages yet; the WhatsApp
   button is just a click-to-chat link.
@@ -243,7 +243,8 @@ Work phase by phase on a branch per phase. Keep the mock working until its repla
 - Forms: zod schema + `issuesToErrors()` + `Field`/`errProps()` for accessible errors. Nigerian
   phone validation: `NG_PHONE`.
 - Respect `prefers-reduced-motion` (already global in `styles.css`; canvas code checks it too).
-- Copy tone: confident, fun, lightly Nigerian ("Make your December detty", "Light up the owambe"),
+- Copy tone: confident, fun, lightly Nigerian ("Make your December detty", "Light up crossover night"). Never say "owambe". The site is
+  for the December season (Christmas → New Year crossover), not year-round —
   always clear. Prices `formatNaira()` → `₦25,000`.
 - Mobile first: test at 390px; no horizontal page scroll (wide tables use `TableWrap`).
 - Wrap all `localStorage`/`sessionStorage` access in try/catch.

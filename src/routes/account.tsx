@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Heart, LogOut, MapPin, Package, Plus, Star, Trash2, User as UserIcon } from "lucide-react";
+import { Heart, LogOut, MailCheck, MapPin, Package, Plus, Star, Trash2, User as UserIcon, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -61,7 +61,7 @@ function Account() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <p className="text-xs uppercase tracking-[0.2em] text-magenta">My account</p>
       <h1 className="text-3xl sm:text-4xl">
-        {user ? <>Hey {user.name.split(" ")[0]} 👋</> : "Your wishlist"}
+        {user ? <>Hey {user.name.split(" ")[0]}</> : "Your wishlist"}
       </h1>
       <div className="mt-8 grid gap-8 lg:grid-cols-[220px_1fr]">
         {user && (
@@ -110,7 +110,7 @@ function Orders() {
   if (!orders.length)
     return (
       <Empty
-        emoji="📦"
+        icon={Package}
         title="No orders yet"
         body="When you place an order it'll show up here with live tracking."
         cta={<Link to="/shop">Start shopping</Link>}
@@ -148,7 +148,7 @@ function Wishlist() {
   if (!list.length)
     return (
       <Empty
-        emoji="💛"
+        icon={Heart}
         title="Nothing saved yet"
         body="Tap the heart on any firework to plan your December haul."
         cta={<Link to="/shop">Browse fireworks</Link>}
@@ -311,7 +311,7 @@ function Reviews() {
       </p>
       {!reviewable.length && (
         <Empty
-          emoji="⭐"
+          icon={Star}
           title="Nothing to review yet"
           body="Once an order is delivered, you can rate each item here."
         />
@@ -624,7 +624,7 @@ function AuthForms() {
       setBusy(false);
       if ("error" in res) toast.error(res.error);
       else if (res.needsConfirmation) setSentTo(r.data.email);
-      else toast.success("Welcome to Detty Sky! 🎆");
+      else toast.success("Welcome to Detty Sky!");
     } else {
       const r = z
         .object({
@@ -648,7 +648,7 @@ function AuthForms() {
     return (
       <div className="mx-auto max-w-md px-4 py-16">
         <div className="glass rounded-3xl p-8 text-center shadow-card">
-          <p className="text-4xl">📬</p>
+          <MailCheck className="mx-auto h-10 w-10 text-gold" aria-hidden />
           <h1 className="mt-3 text-2xl">Check your inbox</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             We sent a confirmation link to <strong className="text-foreground">{sentTo}</strong>. Tap
@@ -728,19 +728,19 @@ function AuthForms() {
 }
 
 function Empty({
-  emoji,
+  icon: Icon,
   title,
   body,
   cta,
 }: {
-  emoji: string;
+  icon: LucideIcon;
   title: string;
   body: string;
   cta?: React.ReactNode;
 }) {
   return (
     <div className="glass rounded-3xl p-10 text-center">
-      <p className="text-4xl">{emoji}</p>
+      <Icon className="mx-auto h-10 w-10 text-gold" aria-hidden />
       <h2 className="mt-3 text-xl">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{body}</p>
       {cta && (

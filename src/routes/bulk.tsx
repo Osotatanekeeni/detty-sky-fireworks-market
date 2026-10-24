@@ -141,7 +141,7 @@ function Bulk() {
           <div className="mt-8 flex flex-wrap justify-center gap-2 text-sm">
             {[
               [Church, "Crossover services"],
-              [PartyPopper, "Weddings & owambe"],
+              [PartyPopper, "Weddings & parties"],
               [Hotel, "Hotel NYE shows"],
               [Building2, "Corporate events"],
             ].map(([I, l]) => {

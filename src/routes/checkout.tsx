@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Building2,
+  ShoppingCart,
   CreditCard,
   Hash,
   Loader2,
@@ -145,7 +146,7 @@ function Checkout() {
   if (!priced.lines.length)
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <p className="text-5xl">🛒</p>
+        <ShoppingCart className="mx-auto h-12 w-12 text-gold" aria-hidden />
         <h1 className="mt-4 text-2xl">Nothing to check out yet</h1>
         <p className="mt-2 text-muted-foreground">Add some sparkle to your cart first.</p>
         <Button asChild variant="gold" size="lg" className="mt-6">
@@ -196,7 +197,7 @@ function Checkout() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <p className="text-xs uppercase tracking-[0.2em] text-magenta">Checkout</p>
-      <h1 className="text-3xl sm:text-4xl">Almost there 🎆</h1>
+      <h1 className="text-3xl sm:text-4xl">Almost there</h1>
       {!user && (
         <p className="mt-2 text-sm text-muted-foreground">
           Checking out as a guest.{" "}
@@ -468,7 +469,7 @@ function Checkout() {
             )}
             {priced.code && (
               <p className="mt-1 text-xs text-emerald">
-                {priced.code.code} applied — {priced.code.pct}% off 🎉{" "}
+                {priced.code.code} applied — {priced.code.pct}% off{" "}
                 <button
                   type="button"
                   className="ml-1 underline"
@@ -522,7 +523,7 @@ function Checkout() {
             {paying ? "Taking you to Paystack…" : `Pay ${formatNaira(priced.total)} with Paystack`}
           </Button>
           <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald" /> Secured by Paystack · Adults 18+
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald" /> Secured by Paystack
             only
           </p>
         </aside>

@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, OCCASIONS, STATES, WHATSAPP_NUMBER } from "@/lib/data";
 import { useCatalogue } from "@/lib/catalogue";
+import { OCCASION_ICONS } from "@/components/site/occasion-icons";
 import { formatNaira } from "@/lib/pricing";
 import { listProducts } from "@/lib/services";
 import { useCartDetails, useStore } from "@/lib/store";
@@ -143,7 +144,7 @@ function Header() {
               <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">Occasions</p>
               <div className="flex flex-wrap gap-2">
                 {OCCASIONS.map((o) => (
-                  <Link key={o.slug} to="/shop" search={{ occasion: o.slug }} onClick={() => setOpen(false)} className="glass rounded-full px-3 py-1.5 text-sm">{o.emoji} {o.name}</Link>
+                  <Link key={o.slug} to="/shop" search={{ occasion: o.slug }} onClick={() => setOpen(false)} className="glass inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm">{(() => { const Icon = OCCASION_ICONS[o.slug]; return <Icon className="h-3.5 w-3.5" aria-hidden />; })()} {o.name}</Link>
                 ))}
               </div>
             </div>
@@ -193,7 +194,7 @@ function Footer() {
         </div>
       </div>
       <div className="border-t border-border/60 px-4 py-5 text-center text-xs text-muted-foreground">
-        🔥 Please use fireworks responsibly. Adults 18+ only. Keep away from children, pets and buildings. © {new Date().getFullYear()} Detty Sky.
+        Please use fireworks responsibly. Adult supervision required. Keep away from children, pets and buildings. © {new Date().getFullYear()} Detty Sky.
       </div>
     </footer>
   );
@@ -212,41 +213,9 @@ function WhatsAppButton() {
   );
 }
 
-function AgeGate() {
-  const [state, setState] = useState<"hidden" | "ask" | "under">("hidden");
-  useEffect(() => {
-    try { if (localStorage.getItem("detty-age-ok") !== "1") setState("ask"); } catch { setState("ask"); }
-  }, []);
-  if (state === "hidden") return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-night/95 p-6 backdrop-blur-xl" role="dialog" aria-modal="true" aria-labelledby="age-title">
-      <div className="glass max-w-md rounded-3xl p-8 text-center shadow-glow">
-        <Sparkles className="mx-auto h-10 w-10 text-gold" />
-        {state === "ask" ? (
-          <>
-            <h2 id="age-title" className="mt-4 text-2xl">Are you 18 or older?</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Fireworks are sold to adults only. Please confirm your age to enter Detty Sky.</p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button variant="gold" size="lg" autoFocus onClick={() => { try { localStorage.setItem("detty-age-ok", "1"); } catch { /* private mode */ } setState("hidden"); }}>Yes, I'm 18+</Button>
-              <Button variant="glass" size="lg" onClick={() => setState("under")}>No</Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 id="age-title" className="mt-4 text-2xl">Sorry, not yet!</h2>
-            <p className="mt-2 text-sm text-muted-foreground">You need to be 18 or older to shop with us. Ask a grown-up to help light up your celebration safely. 💛</p>
-            <Button variant="link" className="mt-4" onClick={() => setState("ask")}>I made a mistake</Button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function SiteShell({ children }: { children: ReactNode }) {
   return (
     <>
-      <AgeGate />
       <Header />
       <main className="min-h-[60vh]">{children}</main>
       <Footer />

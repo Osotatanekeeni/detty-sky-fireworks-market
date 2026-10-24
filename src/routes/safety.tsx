@@ -22,7 +22,7 @@ export const Route = createFileRoute("/safety")({
       {
         name: "description",
         content:
-          "How to set up, light and dispose of fireworks safely. Do's and don'ts for Christmas, crossover and owambe celebrations.",
+          "How to set up, light and dispose of fireworks safely. Do's and don'ts for Christmas, New Year and crossover celebrations.",
       },
       { property: "og:title", content: "Fireworks Safety Guide — Detty Sky" },
       { property: "og:description", content: "Celebrate loud, stay safe." },
@@ -106,7 +106,7 @@ function Safety() {
           Celebrate loud. <span className="text-gold-gradient">Stay safe.</span>
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-          Fireworks are for adults 18+. Two minutes with this guide keeps the owambe about the show
+          Kids love the show — keep an adult in charge. Two minutes with this guide keeps December about the show
           — not the emergency room.
         </p>
       </div>

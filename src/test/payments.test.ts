@@ -52,7 +52,7 @@ const row: OrderRow = {
       kind: "product",
       product_id: "p1",
       bundle_id: null,
-      name: "Owambe King 49",
+      name: "Crossover King 49",
       qty: 12,
       unit_price_kobo: 3_990_000,
       line_total_kobo: 47_880_000,

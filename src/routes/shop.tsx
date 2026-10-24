@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { SlidersHorizontal, X } from "lucide-react";
+import { SearchX, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { ProductGrid } from "@/components/site/ProductCard";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, OCCASIONS } from "@/lib/data";
+import { OCCASION_ICONS } from "@/components/site/occasion-icons";
 import { useCatalogue } from "@/lib/catalogue";
 import { listProducts, type ProductFilters } from "@/lib/services";
 import type { CategorySlug, NoiseLevel, OccasionSlug } from "@/lib/types";
@@ -53,7 +54,7 @@ function Shop() {
         {CATEGORIES.map((c) => <button key={c.slug} className={chip(s.category === c.slug)} onClick={() => set({ category: s.category === c.slug ? undefined : c.slug })}>{c.name}</button>)}
       </Group>
       <Group label="Occasion">
-        {OCCASIONS.map((o) => <button key={o.slug} className={chip(s.occasion === o.slug)} onClick={() => set({ occasion: s.occasion === o.slug ? undefined : o.slug })}>{o.emoji} {o.name}</button>)}
+        {OCCASIONS.map((o) => <button key={o.slug} className={chip(s.occasion === o.slug)} onClick={() => set({ occasion: s.occasion === o.slug ? undefined : o.slug })}><span className="inline-flex items-center gap-1.5">{(() => { const Icon = OCCASION_ICONS[o.slug]; return <Icon className="h-3.5 w-3.5" aria-hidden />; })()} {o.name}</span></button>)}
       </Group>
       <Group label="Max price">
         {[5000, 15000, 50000, 100000].map((v) => <button key={v} className={chip(s.maxPrice === v)} onClick={() => set({ maxPrice: s.maxPrice === v ? undefined : v })}>Under ₦{v.toLocaleString()}</button>)}
@@ -100,7 +101,7 @@ function Shop() {
         <div>
           {products.length ? <ProductGrid products={products} /> : (
             <div className="glass rounded-3xl p-12 text-center">
-              <p className="text-4xl">🎇</p>
+              <SearchX className="mx-auto h-10 w-10 text-gold" aria-hidden />
               <h2 className="mt-3 text-xl">No fireworks match those filters</h2>
               <p className="mt-1 text-sm text-muted-foreground">Try removing a filter or two.</p>
               <Button asChild variant="gold" className="mt-5"><Link to="/shop">Show everything</Link></Button>

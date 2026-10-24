@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Copy, MapPin, MessageCircle } from "lucide-react";
+import { CheckCircle2, Copy, MailCheck, MapPin, MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Fireworks } from "@/components/site/Fireworks";
@@ -257,7 +257,7 @@ function CreateAccount({ order }: { order: Order }) {
   if (sent)
     return (
       <section className="glass rounded-3xl p-5 shadow-glow">
-        <h3 className="text-base">Check your inbox 📬</h3>
+        <h3 className="flex items-center gap-2 text-base"><MailCheck className="h-4 w-4 text-gold" aria-hidden /> Check your inbox</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           We sent a link to {order.customer.email}. Confirm it and this order appears in your account.
         </p>

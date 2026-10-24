@@ -13,7 +13,7 @@ export const Route = createFileRoute("/bundles")({
   head: () => ({
     meta: [
       { title: "Fireworks Bundles & Packs — Detty Sky" },
-      { name: "description", content: "Curated fireworks packs for New Year, owambe, birthdays and church crossover — at a discount." },
+      { name: "description", content: "Curated fireworks packs for Christmas, New Year, birthdays and church crossover — at a discount." },
       { property: "og:title", content: "Fireworks Bundles — Detty Sky" },
       { property: "og:description", content: "Save more with curated packs." },
     ],

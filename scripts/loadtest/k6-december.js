@@ -8,7 +8,7 @@ import { check, sleep } from "k6";
 const BASE = __ENV.BASE || "http://localhost:8080";
 const PRODUCTS = [
   "royal-crown-100",
-  "owambe-king-49",
+  "crossover-king-49",
   "gold-sparklers-36cm-10",
   "sky-blast-rockets-5",
   "naira-rain-cannon",

@@ -5,7 +5,7 @@ export type OccasionSlug = "christmas" | "new-year" | "wedding-entrance" | "birt
 export type NoiseLevel = "Quiet" | "Medium" | "Loud";
 
 export interface Category { slug: CategorySlug; name: string; blurb: string; }
-export interface Occasion { slug: OccasionSlug; name: string; blurb: string; emoji: string; }
+export interface Occasion { slug: OccasionSlug; name: string; blurb: string; }
 export interface PriceTier { minQty: number; discountPct: number; }
 
 export interface Product {

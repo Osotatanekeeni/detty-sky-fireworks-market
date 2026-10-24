@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Pencil, Plus, Search, Star, Trash2, Upload, X } from "lucide-react";
+import { OCCASION_ICONS } from "@/components/site/occasion-icons";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -286,9 +287,9 @@ function ProductEditor({
                         : [...p.occasions, o.slug],
                     })
                   }
-                  className={`rounded-full border px-3 py-1 text-xs ${on ? "border-gold bg-gold/15 text-gold" : "border-border"}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${on ? "border-gold bg-gold/15 text-gold" : "border-border"}`}
                 >
-                  {o.emoji} {o.name}
+                  {(() => { const Icon = OCCASION_ICONS[o.slug]; return <Icon className="h-3 w-3" aria-hidden />; })()} {o.name}
                 </button>
               );
             })}
@@ -559,9 +560,9 @@ function MediaEditor({
                   type="button"
                   onClick={() => setGallery([src, ...gallery.filter((g) => g !== src)])}
                   aria-label={`Make photo ${i + 1} the cover`}
-                  className="rounded-full bg-background px-1.5 text-[10px] shadow"
+                  className="rounded-full bg-background p-1 shadow"
                 >
-                  ★
+                  <Star className="h-3 w-3" aria-hidden />
                 </button>
               )}
               {gallery.length > 1 && (
@@ -569,9 +570,9 @@ function MediaEditor({
                   type="button"
                   onClick={() => setGallery(gallery.filter((g) => g !== src))}
                   aria-label={`Remove photo ${i + 1}`}
-                  className="rounded-full bg-background px-1.5 text-[10px] shadow"
+                  className="rounded-full bg-background p-1 shadow"
                 >
-                  ✕
+                  <X className="h-3 w-3" aria-hidden />
                 </button>
               )}
             </div>

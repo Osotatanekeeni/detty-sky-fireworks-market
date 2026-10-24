@@ -20,7 +20,7 @@ const NOW = new Date("2026-12-01T09:00:00+01:00");
 
 describe("priceCart", () => {
   it("applies bulk tiers, code discount and delivery fee in the right order", () => {
-    const cake = byName("Owambe King 49"); // ₦42,000, in stock
+    const cake = byName("Crossover King 49"); // ₦42,000, in stock
     const r = priceCart(
       tables,
       {
