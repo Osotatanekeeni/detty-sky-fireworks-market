@@ -19,7 +19,7 @@ export function Fireworks({ auto = true, intensity = 1, className = "" }: { auto
     };
     resize();
     const burst = (x: number, y: number) => {
-      const c = COLOURS[Math.floor(Math.random() * COLOURS.length)];
+      const c = COLOURS[Math.floor(Math.random() * COLOURS.length)] ?? "#f5c84c";
       const n = Math.floor(50 * intensity);
       for (let i = 0; i < n; i++) {
         const a = (Math.PI * 2 * i) / n, s = (Math.random() * 2 + 1.5) * devicePixelRatio;
@@ -33,7 +33,7 @@ export function Fireworks({ auto = true, intensity = 1, className = "" }: { auto
       parts.forEach((p) => { ctx.fillStyle = p.c; ctx.globalAlpha = 0.5; ctx.fillRect(p.x, p.y, 2, 2); });
       return;
     }
-    const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; });
+    const io = new IntersectionObserver(([e]) => { visible = e?.isIntersecting ?? true; });
     io.observe(canvas);
     const tick = (t: number) => {
       raf = requestAnimationFrame(tick);

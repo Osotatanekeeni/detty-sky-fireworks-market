@@ -1,8 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { Heart, ShoppingBag, Star } from "lucide-react";
 import { useState } from "react";
-import { getCategory, ratingFor } from "@/lib/services";
+import { getCategory, isCategoryBlocked, ratingFor } from "@/lib/services";
 import { formatNaira } from "@/lib/pricing";
+import { useCatalogue } from "@/lib/catalogue";
+import { formatArrives } from "@/lib/db-map";
 import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 import { SparkBurst } from "./Fireworks";
@@ -18,18 +20,23 @@ export function Stars({ value, size = 14 }: { value: number; size?: number }) {
 }
 
 export function ProductCard({ p }: { p: Product }) {
-  const { add, wishlist, toggleWish } = useStore();
+  const { add, wishlist, toggleWish, deliveryState } = useStore();
   const [burst, setBurst] = useState(0);
-  const r = ratingFor(p.id);
+  const cat = useCatalogue();
+  const blocked = isCategoryBlocked(cat, deliveryState ?? undefined, p.category);
+  const soldOut = !p.preorder && p.stock <= 0;
+  const r = ratingFor(cat, p.id);
   const wished = wishlist.includes(p.id);
   return (
     <article className="group glass relative flex flex-col overflow-hidden rounded-2xl shadow-card transition-all hover:-translate-y-1 hover:border-gold/50">
       <Link to="/product/$slug" params={{ slug: p.slug }} className="relative block aspect-square overflow-hidden">
         <img src={p.image} alt={p.name} loading="lazy" width={816} height={816} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute left-2 top-2 flex flex-col gap-1">
-          {p.preorder && <span className="rounded-full bg-royal px-2 py-0.5 text-[10px] font-bold uppercase">Pre-order · {p.preorder.arrives}</span>}
+          {p.preorder && <span className="rounded-full bg-royal px-2 py-0.5 text-[10px] font-bold uppercase">Pre-order · {formatArrives(p.preorder.arrives)}</span>}
           {p.bestSeller && <span className="rounded-full bg-gold-gradient px-2 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">Best seller</span>}
-          {p.stock < p.lowStockThreshold && !p.preorder && <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">Only {p.stock} left</span>}
+          {blocked && <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase">Not in {deliveryState}</span>}
+          {soldOut && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase">Sold out</span>}
+          {!soldOut && p.stock < p.lowStockThreshold && !p.preorder && <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">Only {p.stock} left</span>}
         </div>
       </Link>
       <button
@@ -51,7 +58,8 @@ export function ProductCard({ p }: { p: Product }) {
           </div>
           <button
             onClick={() => { add({ productId: p.id, qty: 1 }); setBurst((b) => b + 1); }}
-            className="relative rounded-full bg-gold-gradient p-2.5 text-primary-foreground transition-transform active:scale-90"
+            disabled={blocked || soldOut}
+            className="relative rounded-full bg-gold-gradient p-2.5 text-primary-foreground transition-transform active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label={`Add ${p.name} to cart`}
           >
             <ShoppingBag className="h-4 w-4" />

@@ -13,9 +13,14 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { loadCatalogue } from "@/lib/catalogue";
+import { absolute } from "@/lib/site";
+import { AuthProvider } from "@/lib/auth";
 import { StoreProvider } from "@/lib/store";
 import { SiteShell } from "@/components/site/Shell";
 import { Toaster } from "@/components/ui/sonner";
+
+const CF_ANALYTICS_TOKEN = import.meta.env["VITE_CF_ANALYTICS_TOKEN"] as string | undefined;
 
 function NotFoundComponent() {
   return (
@@ -54,6 +59,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  loader: ({ context }) => loadCatalogue(context.queryClient),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -65,14 +71,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Make your December detty. Fireworks delivered across the South-South." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: absolute("/images/products/p-cake.jpg") },
+      { property: "og:site_name", content: "Detty Sky" },
+      { property: "og:locale", content: "en_NG" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap" },
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
+    // Cloudflare Web Analytics: cookieless, no consent banner needed. Off until a token is set.
+    scripts: CF_ANALYTICS_TOKEN
+      ? [
+          {
+            src: "https://static.cloudflareinsights.com/beacon.min.js",
+            defer: true,
+            "data-cf-beacon": JSON.stringify({ token: CF_ANALYTICS_TOKEN }),
+          },
+        ]
+      : [],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -100,10 +121,12 @@ function RootComponent() {
   const isAdmin = pathname.startsWith("/admin");
   return (
     <QueryClientProvider client={queryClient}>
-      <StoreProvider>
-        {isAdmin ? <Outlet /> : <SiteShell><Outlet /></SiteShell>}
-        <Toaster />
-      </StoreProvider>
+      <AuthProvider>
+        <StoreProvider>
+          {isAdmin ? <Outlet /> : <SiteShell><Outlet /></SiteShell>}
+          <Toaster />
+        </StoreProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

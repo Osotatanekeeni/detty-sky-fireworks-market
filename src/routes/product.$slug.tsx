@@ -4,38 +4,93 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Fireworks, SparkBurst } from "@/components/site/Fireworks";
 import { ProductGrid, SectionTitle, Stars } from "@/components/site/ProductCard";
+import { ReviewMediaThumb } from "@/components/site/ReviewMedia";
 import { Button } from "@/components/ui/button";
 import { formatNaira, lineTotals, tierFor } from "@/lib/pricing";
 import { getCategory, getProduct, getReviews, ratingFor, relatedProducts } from "@/lib/services";
 import { useStore } from "@/lib/store";
+import { DeliverTo } from "@/components/site/Shell";
+import { loadCatalogue, useCatalogue } from "@/lib/catalogue";
+import { formatArrives } from "@/lib/db-map";
+import { absolute } from "@/lib/site";
+import { isCategoryBlocked } from "@/lib/services";
 
 export const Route = createFileRoute("/product/$slug")({
-  loader: ({ params }) => {
-    const p = getProduct(params.slug);
+  loader: async ({ params, context }) => {
+    const cat = await loadCatalogue(context.queryClient);
+    const p = getProduct(cat, params.slug);
     if (!p) throw notFound();
-    return { p };
+    return { p, rating: ratingFor(cat, p.id) };
   },
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.p.name} — Detty Sky` },
-          { name: "description", content: loaderData.p.description },
-          { property: "og:title", content: `${loaderData.p.name} — Detty Sky` },
-          { property: "og:description", content: loaderData.p.description },
-          { property: "og:type", content: "product" },
-        ]
-      : [{ title: "Product unavailable — Detty Sky" }, { name: "robots", content: "noindex" }],
-  }),
+  head: ({ loaderData }) => {
+    if (!loaderData)
+      return { meta: [{ title: "Product unavailable — Detty Sky" }, { name: "robots", content: "noindex" }] };
+    const { p, rating } = loaderData;
+    const url = absolute(`/product/${p.slug}`);
+    const image = absolute(p.image);
+    const inStock = !!p.preorder || p.stock - (p.reserved ?? 0) > 0;
+    // https://developers.google.com/search/docs/appearance/structured-data/product
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: p.name,
+      description: p.description,
+      image: [...new Set([p.image, ...p.gallery])].map(absolute),
+      sku: p.slug,
+      category: getCategory(p.category)?.name,
+      brand: { "@type": "Brand", name: "Detty Sky" },
+      offers: {
+        "@type": "Offer",
+        url,
+        priceCurrency: "NGN",
+        price: p.price,
+        availability: p.preorder
+          ? "https://schema.org/PreOrder"
+          : inStock
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+        areaServed: ["Akwa Ibom", "Bayelsa", "Cross River", "Delta", "Edo", "Rivers"].map((name) => ({
+          "@type": "State",
+          name,
+        })),
+      },
+      ...(rating.count
+        ? { aggregateRating: { "@type": "AggregateRating", ratingValue: rating.avg.toFixed(1), reviewCount: rating.count } }
+        : {}),
+    };
+    return {
+      meta: [
+        { title: `${p.name} — Detty Sky` },
+        { name: "description", content: p.description },
+        { property: "og:title", content: `${p.name} — Detty Sky` },
+        { property: "og:description", content: p.description },
+        { property: "og:type", content: "product" },
+        { property: "og:url", content: url },
+        { property: "og:image", content: image },
+        { name: "twitter:image", content: image },
+        { property: "product:price:amount", content: String(p.price) },
+        { property: "product:price:currency", content: "NGN" },
+      ],
+      links: [{ rel: "canonical", href: url }],
+      scripts: [{ type: "application/ld+json", children: JSON.stringify(jsonLd) }],
+    };
+  },
   component: ProductPage,
 });
 
-function VideoPreview({ poster, name }: { poster: string; name: string }) {
+/** The real clip (from R2) is only requested when the shopper taps play — mobile data matters.
+ *  Products without a clip fall back to the canvas fireworks. */
+function VideoPreview({ poster, name, video }: { poster: string; name: string; video?: string | undefined }) {
   const [playing, setPlaying] = useState(false);
   return (
     <div className="relative aspect-square overflow-hidden rounded-3xl bg-night">
       <img src={poster} alt={`${name} preview`} className={`h-full w-full object-cover transition-opacity ${playing ? "opacity-25" : ""}`} />
       {playing ? (
-        <div className="absolute inset-0"><Fireworks intensity={1.6} /></div>
+        video ? (
+          <video src={video} poster={poster} autoPlay muted playsInline loop controls preload="none" className="absolute inset-0 h-full w-full bg-night object-contain" aria-label={`${name} video`} />
+        ) : (
+          <div className="absolute inset-0"><Fireworks intensity={1.6} /></div>
+        )
       ) : (
         <button onClick={() => setPlaying(true)} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-night/30" aria-label={`Play video preview of ${name}`}>
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gold-gradient text-primary-foreground shadow-glow"><Play className="ml-1 h-7 w-7" /></span>
@@ -48,13 +103,21 @@ function VideoPreview({ poster, name }: { poster: string; name: string }) {
 }
 
 function ProductPage() {
-  const { p } = Route.useLoaderData();
-  const { add, wishlist, toggleWish } = useStore();
+  const loaded = Route.useLoaderData().p;
+  const cat = useCatalogue();
+  // Prefer the live catalogue over loader data so admin edits show without a reload.
+  const p = getProduct(cat, loaded.slug) ?? loaded;
+  const { add, wishlist, toggleWish, deliveryState } = useStore();
+  const { campaign } = cat;
   const [qty, setQty] = useState(1);
+  const blocked = isCategoryBlocked(cat, deliveryState ?? undefined, p.category);
+  const preorderClosed = !!p.preorder && !campaign.preordersOpen;
+  const soldOut = !p.preorder && p.stock <= 0;
+  const cannotBuy = blocked || preorderClosed || soldOut;
   const [img, setImg] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
-  const r = ratingFor(p.id);
-  const reviews = getReviews(p.id);
+  const r = ratingFor(cat, p.id);
+  const reviews = getReviews(cat, p.id);
   const t = lineTotals(p.price, qty, p.tiers);
   const activeTier = tierFor(qty, p.tiers);
 
@@ -65,7 +128,7 @@ function ProductPage() {
       </nav>
       <div className="grid gap-10 lg:grid-cols-2">
         <div className="space-y-3">
-          {img === null ? <VideoPreview poster={p.videoPoster} name={p.name} /> : (
+          {img === null ? <VideoPreview poster={p.videoPoster} name={p.name} video={p.video} /> : (
             <img src={p.gallery[img]} alt={`${p.name} photo ${img + 1}`} className="aspect-square w-full rounded-3xl object-cover" />
           )}
           <div className="flex gap-2">
@@ -83,7 +146,7 @@ function ProductPage() {
         <div>
           {p.preorder && (
             <div className="mb-4 rounded-2xl border border-royal/60 bg-royal/15 p-3 text-sm">
-              <strong className="text-gold">Pre-order — arrives {p.preorder.arrives}.</strong> Pay now, we deliver before New Year's Eve.
+              <strong className="text-gold">Pre-order — arrives {formatArrives(p.preorder.arrives)}.</strong> Pay now, we deliver before New Year's Eve.
             </div>
           )}
           <p className="text-xs uppercase tracking-[0.2em] text-magenta">{getCategory(p.category)?.name}</p>
@@ -110,7 +173,7 @@ function ProductPage() {
               <tbody>
                 {[{ minQty: 1, discountPct: 0 }, ...p.tiers].map((tier, i, arr) => (
                   <tr key={tier.minQty} className={(activeTier?.minQty ?? 1) === tier.minQty ? "text-gold" : ""}>
-                    <td className="py-1">{tier.minQty}{arr[i + 1] ? `–${arr[i + 1].minQty - 1}` : "+"}</td>
+                    <td className="py-1">{tier.minQty}{arr[i + 1] ? `–${arr[i + 1]!.minQty - 1}` : "+"}</td>
                     <td>{tier.discountPct ? `${tier.discountPct}% off` : "—"}</td>
                     <td>{formatNaira(p.price * (1 - tier.discountPct / 100))}</td>
                   </tr>
@@ -125,21 +188,23 @@ function ProductPage() {
               <input value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} className="w-12 bg-transparent text-center font-semibold outline-none" aria-label="Quantity" inputMode="numeric" />
               <button className="p-3" onClick={() => setQty((q) => q + 1)} aria-label="Increase quantity"><Plus className="h-4 w-4" /></button>
             </div>
-            <Button variant="gold" size="lg" className="relative flex-1" onClick={() => { add({ productId: p.id, qty }); setBurst((b) => b + 1); toast.success(`${qty} × ${p.name} added to cart`); }}>
-              {p.preorder ? "Pre-order" : "Add to cart"} · {formatNaira(t.total)}
+            <Button variant="gold" size="lg" className="relative flex-1" disabled={cannotBuy} onClick={() => { add({ productId: p.id, qty }); setBurst((b) => b + 1); toast.success(`${qty} × ${p.name} added to cart`); }}>
+              {blocked ? `Unavailable in ${deliveryState}` : preorderClosed ? "Pre-orders closed" : soldOut ? "Sold out" : <>{p.preorder ? "Pre-order" : "Add to cart"} · {formatNaira(t.total)}</>}
               <SparkBurst trigger={burst} />
             </Button>
             <Button variant="glass" size="lg" onClick={() => toggleWish(p.id)} aria-label="Toggle wishlist" aria-pressed={wishlist.includes(p.id)}>
               <Heart className={wishlist.includes(p.id) ? "fill-magenta text-magenta" : ""} />
             </Button>
           </div>
-          {t.discount > 0 && <p className="mt-2 text-sm text-emerald">You save {formatNaira(t.discount)} with bulk pricing 🎉</p>}
-          {p.stock < p.lowStockThreshold && <p className="mt-2 text-sm text-ember">Hurry — only {p.stock} left in stock.</p>}
+          <DeliverTo className="mt-3" />
+          {blocked && <p className="mt-2 rounded-xl border border-ember/50 bg-ember/10 p-3 text-sm">{getCategory(p.category)?.name} can't be delivered to {deliveryState} right now due to local restrictions. Choose another state above or browse other categories.</p>}
+          {t.discount > 0 && <p className="mt-2 text-sm text-emerald">You save {formatNaira(t.discount)} with bulk pricing</p>}
+          {!soldOut && !p.preorder && p.stock < p.lowStockThreshold && <p className="mt-2 text-sm text-ember">Hurry — only {p.stock} left in stock.</p>}
 
           <details className="glass mt-6 rounded-2xl p-4" open>
             <summary className="flex cursor-pointer items-center gap-2 font-semibold"><ShieldAlert className="h-4 w-4 text-ember" /> Safety instructions</summary>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Adults 18+ only. Read the label before use.</li>
+              <li>Adult supervision required. Read the label before use.</li>
               <li>Place on flat, firm ground at least {Math.max(5, p.heightM / 2)}m from people, cars and buildings.</li>
               <li>Light at arm's length and step back immediately. Never lean over the firework.</li>
               <li>Never relight a dud — wait 20 minutes, then soak in water.</li>
@@ -180,10 +245,7 @@ function ProductPage() {
                 {rv.media && (
                   <div className="mt-3 flex gap-2">
                     {rv.media.map((m, i) => (
-                      <div key={i} className="relative h-20 w-20 overflow-hidden rounded-lg">
-                        <img src={m.src} alt="Customer upload" loading="lazy" className="h-full w-full object-cover" />
-                        {m.type === "video" && <Play className="absolute inset-0 m-auto h-6 w-6" />}
-                      </div>
+                      <ReviewMediaThumb key={i} m={m} poster={p.image} />
                     ))}
                   </div>
                 )}
@@ -196,7 +258,7 @@ function ProductPage() {
 
       <section className="mt-20">
         <SectionTitle eyebrow="More sparkle" title="You might also like" />
-        <ProductGrid products={relatedProducts(p)} />
+        <ProductGrid products={relatedProducts(cat, p)} />
       </section>
     </div>
   );
