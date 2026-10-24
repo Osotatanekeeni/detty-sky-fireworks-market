@@ -12,9 +12,8 @@ import {
 } from "@/components/ui/chart";
 import { STATES } from "@/lib/data";
 import { useQuery } from "@tanstack/react-query";
-import { listReviews } from "@/lib/admin.functions";
+import { listOrders, listQuotes, listReviews } from "@/lib/admin.functions";
 import { useCatalogue } from "@/lib/catalogue";
-import { useDb } from "@/lib/mock-db";
 import { formatNaira } from "@/lib/pricing";
 
 export const Route = createFileRoute("/admin/")({ component: Dashboard });
@@ -24,12 +23,13 @@ const shortNaira = (n: number) =>
   n >= 1e6 ? `₦${(n / 1e6).toFixed(1)}m` : n >= 1e3 ? `₦${Math.round(n / 1e3)}k` : `₦${n}`;
 
 function Dashboard() {
-  const { orders, quotes } = useDb();
+  const { data: orders = [] } = useQuery({ queryKey: ["admin", "orders"], queryFn: () => listOrders() });
+  const { data: quotes = [] } = useQuery({ queryKey: ["admin", "quotes"], queryFn: () => listQuotes() });
   const { products } = useCatalogue();
   const { data: reviews = [] } = useQuery({ queryKey: ["admin", "reviews"], queryFn: () => listReviews() });
-  const paid = orders.filter((o) => o.payment?.status !== "pending");
+  const paid = orders.filter((o) => o.payment?.status === "paid");
   const revenue = paid.reduce((s, o) => s + o.total, 0);
-  const toFulfil = orders.filter((o) => o.status !== "Delivered");
+  const toFulfil = paid.filter((o) => o.status !== "Delivered");
   const byState = STATES.map((st) => {
     const os = paid.filter((o) => o.address.state === st);
     return { state: st, revenue: os.reduce((s, o) => s + o.total, 0), orders: os.length };

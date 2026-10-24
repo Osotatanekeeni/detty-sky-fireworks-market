@@ -6,8 +6,7 @@
 // sends. See CLAUDE.md → "Money rules".
 import { lineTotals } from "./pricing";
 import type { Catalogue } from "./catalogue";
-import type { DbState } from "./mock-db";
-import type { CategorySlug, StateName } from "./types";
+import type { CategorySlug, DiscountCode, StateName } from "./types";
 
 export interface CartInputLine {
   productId?: string | undefined;
@@ -54,7 +53,10 @@ export interface PricedCart {
   problems: string[];
 }
 
-export type PricingTables = Pick<Catalogue, "products" | "bundles" | "zones" | "blocks"> & Pick<DbState, "codes">;
+export type PricingTables = Pick<Catalogue, "products" | "bundles" | "zones" | "blocks"> & {
+  /** Only the codes the caller is allowed to know about (codes aren't public). */
+  codes: DiscountCode[];
+};
 
 export function priceCart(t: PricingTables, input: CheckoutInput, now = new Date()): PricedCart {
   const lines: PricedLine[] = [];

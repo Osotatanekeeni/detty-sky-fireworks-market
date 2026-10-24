@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, Copy, MapPin, MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Fireworks } from "@/components/site/Fireworks";
 import { Field, formatDate, inputClass } from "@/components/site/forms";
@@ -8,21 +8,22 @@ import { OrderTimeline, StatusPill } from "@/components/site/OrderTimeline";
 import { TrackForm } from "@/components/site/TrackForm";
 import { Button } from "@/components/ui/button";
 import { WHATSAPP_NUMBER } from "@/lib/data";
-import { useDb } from "@/lib/mock-db";
+import { useQuery } from "@tanstack/react-query";
+import { retryPayment, verifyPayment } from "@/lib/checkout.functions";
+import { getOrder } from "@/lib/orders.functions";
+import { trackingPhone } from "@/lib/tracking";
 import { formatNaira } from "@/lib/pricing";
-import { findOrderForTracking } from "@/lib/services";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
 import { formatArrives } from "@/lib/db-map";
 
-type Search = { new?: boolean; phone?: string };
+type Search = { reference?: string };
 
 export const Route = createFileRoute("/order/$id")({
-  validateSearch: (s: Record<string, unknown>): Search => ({
-    ...(s["new"] === true || s["new"] === "true" ? { new: true } : {}),
-    ...(typeof s["phone"] === "string" ? { phone: s["phone"] } : {}),
-  }),
+  // Paystack sends buyers back with ?trxref=…&reference=…
+  validateSearch: (s: Record<string, unknown>): Search =>
+    typeof s["reference"] === "string" ? { reference: s["reference"] } : {},
   head: ({ params }) => ({
     meta: [{ title: `Order ${params.id} — Detty Sky` }, { name: "robots", content: "noindex" }],
   }),
@@ -31,31 +32,57 @@ export const Route = createFileRoute("/order/$id")({
 
 function OrderPage() {
   const { id } = Route.useParams();
-  const search = Route.useSearch();
-  const { hydrated, orders } = useDb();
-  const { orderIds } = useStore();
+  const { reference } = Route.useSearch();
+  const { orderRefs, loaded, rememberOrder, clear } = useStore();
   const { user } = useAuth();
+  const ref = reference ?? orderRefs[id];
 
-  if (!hydrated)
+  // Back from Paystack: confirm with Paystack on the server before showing anything as paid.
+  const verify = useQuery({
+    queryKey: ["verify", reference],
+    queryFn: () => verifyPayment({ data: reference! }),
+    enabled: !!reference,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const phone = loaded ? trackingPhone(id) : undefined; // sessionStorage: client only
+  const order = useQuery({
+    queryKey: ["order", id, ref, phone, user?.id],
+    queryFn: () => getOrder({ data: { number: id, ref, phone } }),
+    enabled: loaded && user !== undefined && (!reference || !verify.isPending),
+  });
+
+  const paidNow = !!reference && verify.data?.paid === true;
+  // Once per return from Paystack: keep the reference (it's this browser's key to the order)
+  // and empty the cart if the payment went through.
+  const handled = useRef("");
+  useEffect(() => {
+    if (!reference || !verify.data || handled.current === reference) return;
+    handled.current = reference;
+    rememberOrder(id, reference);
+    if (verify.data.paid) clear();
+  }, [reference, verify.data, id, rememberOrder, clear]);
+
+  // (A disabled query stays isPending forever in TanStack Query v5 — use isLoading for verify.)
+  if (!order.data && (order.isPending || verify.isLoading))
     return (
       <div className="mx-auto max-w-4xl px-4 py-24 text-center text-muted-foreground">
-        Loading your order…
+        {reference ? "Confirming your payment with Paystack…" : "Loading your order…"}
       </div>
     );
-
-  const order = orders.find((o) => o.id === id);
-  // Who may see this order: the browser that placed it, the signed-in owner, or someone who knows the phone number.
-  const allowed =
-    order &&
-    (orderIds.includes(order.id) ||
-      (user && user.email.toLowerCase() === order.customer.email.toLowerCase()) ||
-      (search.phone && findOrderForTracking(order.id, search.phone)));
-
-  if (!order || !allowed) return <TrackForm initialId={id} notFound={!!search.phone || !order} />;
-  return <OrderDetails order={order} celebrate={!!search.new} />;
+  if (!order.data) return <TrackForm initialId={id} notFound={!!phone} />;
+  return <OrderDetails order={order.data} celebrate={paidNow} payRef={ref} />;
 }
 
-function OrderDetails({ order, celebrate }: { order: Order; celebrate: boolean }) {
+function OrderDetails({
+  order,
+  celebrate,
+  payRef,
+}: {
+  order: Order;
+  celebrate: boolean;
+  payRef: string | undefined;
+}) {
   const { user } = useAuth();
   const preorder = order.lines.some((l) => l.preorderArrives);
   const paid = order.payment?.status === "paid";
@@ -103,10 +130,13 @@ function OrderDetails({ order, celebrate }: { order: Order; celebrate: boolean }
           <StatusPill status={order.status} />
         </div>
 
-        {!paid && (
-          <div className="mt-6 rounded-2xl border border-ember/50 bg-ember/10 p-4 text-sm">
-            <strong>Awaiting payment.</strong> We've sent a Paystack payment link to your
-            email/WhatsApp. Your order is confirmed once payment lands.
+        {order.status === "Awaiting payment" && !paid && (
+          <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-ember/50 bg-ember/10 p-4 text-sm">
+            <p className="flex-1">
+              <strong>Awaiting payment.</strong> Your order is confirmed once Paystack confirms
+              payment. We hold your items for 30 minutes.
+            </p>
+            {payRef && <PayAgain number={order.id} payRef={payRef} />}
           </div>
         )}
 
@@ -271,5 +301,30 @@ function CreateAccount({ order }: { order: Order }) {
         </Button>
       </form>
     </section>
+  );
+}
+
+function PayAgain({ number, payRef }: { number: string; payRef: string }) {
+  const { rememberOrder } = useStore();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="paystack"
+      size="sm"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await retryPayment({ data: { number, ref: payRef } });
+          rememberOrder(number, r.reference);
+          window.location.assign(r.url);
+        } catch (e) {
+          setBusy(false);
+          toast.error(e instanceof Error ? e.message : "Couldn't start payment");
+        }
+      }}
+    >
+      Pay now
+    </Button>
   );
 }

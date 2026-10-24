@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Building2,
@@ -25,23 +25,15 @@ import {
   normalisePhone,
 } from "@/components/site/forms";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { CheckoutError, placeOrder } from "@/lib/actions";
 import { priceCart } from "@/lib/checkout";
-import { useDb } from "@/lib/mock-db";
+import { checkCode, createCheckout } from "@/lib/checkout.functions";
 import { formatNaira } from "@/lib/pricing";
 import { getCategory } from "@/lib/services";
 import { useAddresses } from "@/lib/addresses";
 import { useAuth } from "@/lib/auth";
 import { useCatalogue } from "@/lib/catalogue";
 import { useStore } from "@/lib/store";
-import type { Payment, StateName } from "@/lib/types";
+import type { StateName } from "@/lib/types";
 import { formatArrives } from "@/lib/db-map";
 
 export const Route = createFileRoute("/checkout")({
@@ -79,13 +71,16 @@ type Form = {
 };
 
 function Checkout() {
-  const { cart, clear, rememberOrder, deliveryState } = useStore();
+  const { cart, rememberOrder, deliveryState } = useStore();
   const { user } = useAuth();
   const { addresses } = useAddresses(user?.id ?? null);
   const catalogue = useCatalogue();
-  const mock = useDb();
-  const tables = useMemo(() => ({ ...catalogue, codes: mock.codes }), [catalogue, mock.codes]);
-  const nav = useNavigate();
+  // Codes aren't public: the server checks one when it's applied (and again at payment).
+  const [validCode, setValidCode] = useState<{ code: string; pct: number } | null>(null);
+  const tables = useMemo(
+    () => ({ ...catalogue, codes: validCode ? [{ ...validCode, active: true, uses: 0 }] : [] }),
+    [catalogue, validCode],
+  );
   const [form, setForm] = useState<Form>({
     name: "",
     email: "",
@@ -97,7 +92,20 @@ function Checkout() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [codeInput, setCodeInput] = useState("");
   const [code, setCode] = useState("");
-  const [payOpen, setPayOpen] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [checkingCode, setCheckingCode] = useState(false);
+  const applyCode = async () => {
+    const c = codeInput.trim();
+    if (!c) return;
+    setCheckingCode(true);
+    try {
+      setValidCode(await checkCode({ data: c }));
+    } catch {
+      setValidCode(null);
+    }
+    setCode(c);
+    setCheckingCode(false);
+  };
 
   // Prefill from the signed-in customer / their first saved address / the header's "deliver to".
   useEffect(() => {
@@ -134,12 +142,6 @@ function Checkout() {
     });
   };
 
-  if (!mock.hydrated)
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-24 text-center text-muted-foreground">
-        Loading checkout…
-      </div>
-    );
   if (!priced.lines.length)
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
@@ -152,7 +154,7 @@ function Checkout() {
       </div>
     );
 
-  const startPayment = () => {
+  const startPayment = async () => {
     const r = schema.safeParse(form);
     if (!r.success) {
       setErrors(issuesToErrors(r.error.issues));
@@ -164,29 +166,30 @@ function Checkout() {
       toast.error(priced.problems[0]);
       return;
     }
-    setPayOpen(true);
-  };
-
-  const complete = (channel: Payment["channel"]) => {
-    const r = schema.parse(form);
+    // The server re-prices the cart itself; we only send what's in it.
+    setPaying(true);
     try {
-      const order = placeOrder(catalogue, {
-        lines: cart,
-        customer: { name: r.name, email: r.email, phone: r.phone },
-        address: { state: r.state as StateName, city: r.city, street: r.street },
-        code: code || undefined,
-        channel,
+      const res = await createCheckout({
+        data: {
+          lines: cart.map((l) => ({
+            qty: l.qty,
+            ...(l.productId ? { productId: l.productId } : { bundleId: l.bundleId }),
+          })),
+          contact: { name: r.data.name, email: r.data.email, phone: r.data.phone },
+          address: { state: r.data.state as StateName, city: r.data.city, street: r.data.street },
+          ...(code ? { code } : {}),
+        },
       });
-      rememberOrder(order.id);
-      clear();
-      nav({ to: "/order/$id", params: { id: order.id }, search: { new: true } });
-    } catch (e) {
-      setPayOpen(false);
-      toast.error(
-        e instanceof CheckoutError
-          ? (e.problems[0] ?? "Checkout failed")
-          : "Something went wrong. You have not been charged.",
-      );
+      if (!res.ok) {
+        setPaying(false);
+        toast.error(res.problems[0] ?? "Checkout failed");
+        return;
+      }
+      rememberOrder(res.orderNumber, res.reference);
+      window.location.assign(res.authorizationUrl);
+    } catch {
+      setPaying(false);
+      toast.error("Something went wrong starting payment. You have not been charged.");
     }
   };
 
@@ -208,7 +211,7 @@ function Checkout() {
         className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]"
         onSubmit={(e) => {
           e.preventDefault();
-          startPayment();
+          void startPayment();
         }}
         noValidate
       >
@@ -452,8 +455,8 @@ function Checkout() {
                 type="button"
                 variant="glass"
                 className="h-10"
-                onClick={() => setCode(codeInput.trim())}
-                disabled={!codeInput.trim()}
+                onClick={() => void applyCode()}
+                disabled={!codeInput.trim() || checkingCode}
               >
                 Apply
               </Button>
@@ -472,6 +475,7 @@ function Checkout() {
                   onClick={() => {
                     setCode("");
                     setCodeInput("");
+                    setValidCode(null);
                   }}
                 >
                   Remove
@@ -513,8 +517,9 @@ function Checkout() {
             </div>
           </dl>
 
-          <Button type="submit" variant="paystack" size="lg" className="mt-5 w-full">
-            <Lock /> Pay {formatNaira(priced.total)} with Paystack
+          <Button type="submit" variant="paystack" size="lg" className="mt-5 w-full" disabled={paying}>
+            {paying ? <Loader2 className="animate-spin" /> : <Lock />}{" "}
+            {paying ? "Taking you to Paystack…" : `Pay ${formatNaira(priced.total)} with Paystack`}
           </Button>
           <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald" /> Secured by Paystack · Adults 18+
@@ -523,98 +528,6 @@ function Checkout() {
         </aside>
       </form>
 
-      <PaystackDialog
-        open={payOpen}
-        onOpenChange={setPayOpen}
-        amount={priced.total}
-        email={form.email}
-        onPaid={complete}
-      />
     </div>
-  );
-}
-
-/**
- * Stand-in for Paystack Popup / redirect. In Phase 2 this is replaced by:
- * server `initializePayment` → Paystack checkout → webhook `charge.success` → order marked paid.
- */
-function PaystackDialog({
-  open,
-  onOpenChange,
-  amount,
-  email,
-  onPaid,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  amount: number;
-  email: string;
-  onPaid: (c: Payment["channel"]) => void;
-}) {
-  const [channel, setChannel] = useState<Payment["channel"]>("card");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!open) setBusy(false);
-  }, [open]);
-  const pay = () => {
-    setBusy(true);
-    setTimeout(() => onPaid(channel), 1200);
-  };
-  const channels: {
-    id: Payment["channel"];
-    label: string;
-    icon: typeof CreditCard;
-    detail: string;
-  }[] = [
-    { id: "card", label: "Card", icon: CreditCard, detail: "Visa, Mastercard, Verve" },
-    {
-      id: "bank_transfer",
-      label: "Transfer",
-      icon: Building2,
-      detail: "Pay into a one-time account number",
-    },
-    { id: "ussd", label: "USSD", icon: Hash, detail: "Dial a short code from any bank" },
-  ];
-  return (
-    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="max-w-md rounded-3xl border-border bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span className="rounded-md bg-emerald px-1.5 py-0.5 font-sans text-xs font-bold text-primary-foreground">
-              paystack
-            </span>{" "}
-            Pay {formatNaira(amount)}
-          </DialogTitle>
-          <DialogDescription>{email} · Demo mode — no real money moves</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-2" role="radiogroup" aria-label="Payment method">
-          {channels.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="radio"
-              aria-checked={channel === c.id}
-              onClick={() => setChannel(c.id)}
-              className={`flex items-center gap-3 rounded-2xl border p-3 text-left ${channel === c.id ? "border-emerald bg-emerald/10" : "border-border hover:border-emerald/50"}`}
-            >
-              <c.icon className="h-5 w-5 text-emerald" />
-              <span>
-                <span className="block text-sm font-semibold">{c.label}</span>
-                <span className="text-xs text-muted-foreground">{c.detail}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-        <Button variant="paystack" size="lg" onClick={pay} disabled={busy} className="w-full">
-          {busy ? (
-            <>
-              <Loader2 className="animate-spin" /> Confirming payment…
-            </>
-          ) : (
-            <>Simulate successful payment</>
-          )}
-        </Button>
-      </DialogContent>
-    </Dialog>
   );
 }

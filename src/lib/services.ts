@@ -1,10 +1,8 @@
-// Read services. Catalogue reads are pure functions over the Supabase-loaded catalogue
-// (components get it from useCatalogue()). Order reads still use the mock database until
-// checkout moves to Supabase in Phase 2.
+// Read helpers: pure functions over the Supabase-loaded catalogue (components get it from
+// useCatalogue()). Orders are read through server functions in orders.functions.ts.
 import type { Catalogue } from "./catalogue";
 import { CATEGORIES, OCCASIONS } from "./data";
-import { db } from "./mock-db";
-import type { Bundle, CategorySlug, NoiseLevel, OccasionSlug, Order, Product, StateName } from "./types";
+import type { Bundle, CategorySlug, NoiseLevel, OccasionSlug, Product, StateName } from "./types";
 
 type Cat<K extends keyof Catalogue> = Pick<Catalogue, K>;
 
@@ -61,19 +59,6 @@ export const bundleValue = (c: Cat<"products">, b: Bundle) =>
   b.items.reduce((s, i) => s + (getProductById(c, i.productId)?.price ?? 0) * i.qty, 0);
 export const getCategory = (slug: string) => CATEGORIES.find((c) => c.slug === slug);
 export const getOccasion = (slug: string) => OCCASIONS.find((o) => o.slug === slug);
-export const getOrder = (id: string) => db.get().orders.find((o) => o.id.toLowerCase() === id.trim().toLowerCase());
-
-const digits = (s: string) => s.replace(/\D/g, "").slice(-10);
-/** Guest order lookup: order number + the phone used at checkout. */
-export function findOrderForTracking(id: string, phone: string): Order | undefined {
-  const o = getOrder(id);
-  return o && digits(o.customer.phone) === digits(phone) ? o : undefined;
-}
-
-/** Orders that belong to a signed-in customer (matched by email — guest orders attach automatically). */
-export const ordersForEmail = (email: string) =>
-  db.get().orders.filter((o) => o.customer.email.toLowerCase() === email.toLowerCase());
-
 export function deliveryQuote(c: Cat<"zones">, state?: StateName, city?: string) {
   const zone = c.zones.find((z) => z.state === state);
   const found = zone?.cities.find((x) => x.name === city);

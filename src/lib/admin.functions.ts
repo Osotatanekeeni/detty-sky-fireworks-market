@@ -5,12 +5,24 @@
 // a clear FORBIDDEN error. Inputs are validated with zod on the server — never trust the
 // browser's shape. After calling one of these, refresh the catalogue (useRefreshCatalogue).
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestUrl } from "@tanstack/react-start/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { STATES } from "./data";
 import {
+  ORDER_SELECT,
+  QUOTE_SELECT,
   REVIEW_SELECT,
   bannerFromRow,
+  codeFromRow,
+  orderFromRow,
+  quoteFromRow,
+  quoteStatusToDb,
+  statusToDb,
+  toNaira,
+  type CodeRow,
+  type OrderRow,
+  type QuoteRow,
   bannerToRow,
   bundleToRow,
   campaignToRow,
@@ -21,8 +33,23 @@ import {
   type BannerRow,
   type ReviewRow,
 } from "./db-map";
-import { supabaseForRequest } from "./supabase.server";
-import type { Banner, Bundle, Campaign, DeliveryZone, Product, Review } from "./types";
+import { sendQuoteReply, sendStatusUpdate } from "./email.server";
+import { initializeTransaction } from "./paystack.server";
+import { confirmPayment, loadOrder } from "./payments.server";
+import { supabaseForRequest, supabaseService } from "./supabase.server";
+import type {
+  Banner,
+  BulkQuote,
+  Bundle,
+  Campaign,
+  DeliveryZone,
+  DiscountCode,
+  Order,
+  OrderStatus,
+  Product,
+  QuoteStatus,
+  Review,
+} from "./types";
 
 async function requireAdmin(): Promise<SupabaseClient> {
   const db = supabaseForRequest();
@@ -126,15 +153,13 @@ export const saveProduct = createServerFn({ method: "POST" })
     ok(await db.from("price_tiers").delete().eq("product_id", p.id), "Saving price tiers");
     if (p.tiers.length)
       ok(
-        await db
-          .from("price_tiers")
-          .insert(
-            p.tiers.map((t) => ({
-              product_id: p.id,
-              min_qty: t.minQty,
-              discount_pct: t.discountPct,
-            })),
-          ),
+        await db.from("price_tiers").insert(
+          p.tiers.map((t) => ({
+            product_id: p.id,
+            min_qty: t.minQty,
+            discount_pct: t.discountPct,
+          })),
+        ),
         "Saving price tiers",
       );
   });
@@ -298,3 +323,281 @@ export const setReviewStatus = createServerFn({ method: "POST" })
   });
 
 export const newId = () => crypto.randomUUID();
+
+// ── Orders (Phase 2) ────────────────────────────────────────
+const orderStatus = z.enum(["Processing", "Dispatched", "Out for Delivery", "Delivered"]);
+
+export const listOrders = createServerFn({ method: "GET" }).handler(async (): Promise<Order[]> => {
+  const db = await requireAdmin();
+  const rows = ok(
+    await db
+      .from("orders")
+      .select(ORDER_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    "Loading orders",
+  );
+  return (rows as unknown as OrderRow[]).map((r) => orderFromRow(r));
+});
+
+export const getAdminOrder = createServerFn({ method: "GET" })
+  .validator((n: string) => z.string().max(20).parse(n))
+  .handler(async ({ data }): Promise<Order | null> => {
+    await requireAdmin();
+    return loadOrder({ number: data.toUpperCase() });
+  });
+
+/** Moves a paid order along the delivery timeline and emails the customer. */
+export const setOrderStatus = createServerFn({ method: "POST" })
+  .validator((d: { orderId: string; status: OrderStatus }) =>
+    z.object({ orderId: uuid, status: orderStatus }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await requireAdmin();
+    ok(
+      await db.rpc("set_order_status", {
+        p_order: data.orderId,
+        p_status: statusToDb(data.status),
+      }),
+      "Updating status",
+    );
+    const order = await loadOrder({ id: data.orderId });
+    if (order) await sendStatusUpdate(order);
+    return order;
+  });
+
+/** For money that arrived outside Paystack (e.g. a direct bank transfer the owner has seen). */
+export const markOrderPaid = createServerFn({ method: "POST" })
+  .validator((orderId: string) => uuid.parse(orderId))
+  .handler(async ({ data: orderId }) => {
+    await requireAdmin();
+    const svc = supabaseService();
+    const { data: o } = await svc
+      .from("orders")
+      .select("number, total_kobo, status")
+      .eq("id", orderId)
+      .single();
+    if (!o) throw new Error("Order not found");
+    const reference = `MANUAL-${o.number}-${crypto.randomUUID().slice(0, 6)}`;
+    ok(
+      await svc.from("payments").insert({
+        order_id: orderId,
+        provider: "manual",
+        reference,
+        amount_kobo: o.total_kobo,
+        status: "pending",
+      }),
+      "Recording payment",
+    );
+    return confirmPayment(reference, Number(o.total_kobo), "manual", { markedBy: "admin" });
+  });
+
+/** A fresh Paystack link for an unpaid order (bulk quotes, or a buyer whose payment failed). */
+export const createPaymentLink = createServerFn({ method: "POST" })
+  .validator((orderId: string) => uuid.parse(orderId))
+  .handler(async ({ data: orderId }) => {
+    await requireAdmin();
+    return paymentLinkFor(orderId);
+  });
+
+async function paymentLinkFor(orderId: string) {
+  const svc = supabaseService();
+  const { data: o } = await svc
+    .from("orders")
+    .select("id, number, email, total_kobo, status")
+    .eq("id", orderId)
+    .single();
+  if (!o) throw new Error("Order not found");
+  if (o.status !== "pending_payment") throw new Error("This order isn't awaiting payment.");
+  if (!o.email) throw new Error("Add the customer's email first — Paystack needs one.");
+  const reference = `DSKY-${o.number.replace("DS-", "")}-${crypto.randomUUID().slice(0, 8)}`;
+  ok(
+    await svc
+      .from("payments")
+      .insert({ order_id: o.id, reference, amount_kobo: o.total_kobo, status: "pending" }),
+    "Creating payment",
+  );
+  const site = (process.env["SITE_URL"] || getRequestUrl().origin).replace(/\/$/, "");
+  const { authorizationUrl } = await initializeTransaction({
+    email: o.email,
+    amountKobo: Number(o.total_kobo),
+    reference,
+    callbackUrl: `${site}/order/${o.number}`,
+    metadata: { orderId: o.id, orderNumber: o.number },
+  });
+  return { url: authorizationUrl, reference };
+}
+
+// ── Bulk quotes ─────────────────────────────────────────────
+export const listQuotes = createServerFn({ method: "GET" }).handler(
+  async (): Promise<BulkQuote[]> => {
+    const db = await requireAdmin();
+    const rows = ok(
+      await db.from("bulk_quotes").select(QUOTE_SELECT).order("created_at", { ascending: false }),
+      "Loading quotes",
+    );
+    return (rows as unknown as QuoteRow[]).map(quoteFromRow);
+  },
+);
+
+export const updateQuote = createServerFn({ method: "POST" })
+  .validator(
+    (d: {
+      id: string;
+      status?: QuoteStatus;
+      response?: string;
+      quotedAmount?: number;
+      notify?: boolean;
+    }) =>
+      z
+        .object({
+          id: uuid,
+          status: z.enum(["New", "Quoted", "Closed"]).optional(),
+          response: z.string().max(4000).optional(),
+          quotedAmount: naira.positive().optional(),
+          notify: z.boolean().optional(),
+        })
+        .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await requireAdmin();
+    const rows = ok(
+      await db
+        .from("bulk_quotes")
+        .update({
+          ...(data.status ? { status: quoteStatusToDb(data.status) } : {}),
+          ...(data.response != null ? { response: data.response } : {}),
+          ...(data.quotedAmount != null ? { quoted_kobo: toKobo(data.quotedAmount) } : {}),
+        })
+        .eq("id", data.id)
+        .select(QUOTE_SELECT),
+      "Updating quote",
+    );
+    const q = quoteFromRow((rows as unknown as QuoteRow[])[0]!);
+    if (data.notify && q.response)
+      await sendQuoteReply({
+        name: q.name,
+        email: q.email,
+        request: q.request,
+        response: q.response,
+        amount: q.quotedAmount,
+      });
+    return q;
+  });
+
+/** Accepted quote → an order awaiting payment (held 14 days) + a Paystack link emailed to the buyer. */
+export const convertQuoteToOrder = createServerFn({ method: "POST" })
+  .validator((id: string) => uuid.parse(id))
+  .handler(async ({ data: id }) => {
+    await requireAdmin();
+    const svc = supabaseService();
+    const { data: q } = await svc.from("bulk_quotes").select("*").eq("id", id).single();
+    if (!q) throw new Error("Quote not found");
+    if (!q.quoted_kobo) throw new Error("Set a quoted amount first.");
+    if (q.order_id) throw new Error("This quote already has an order.");
+    const { data: city } = await svc
+      .from("delivery_cities")
+      .select("days")
+      .eq("state", q.state)
+      .eq("name", q.city)
+      .maybeSingle();
+    const eta = new Date();
+    eta.setDate(eta.getDate() + (city?.days ?? 3));
+    const { data: order, error } = await svc.rpc("place_order", {
+      p_order: {
+        email: q.email ?? "",
+        customer_name: q.name,
+        phone: q.phone,
+        state: q.state,
+        city: q.city,
+        street: "To be confirmed",
+        subtotal_kobo: q.quoted_kobo,
+        bulk_discount_kobo: 0,
+        code_discount_kobo: 0,
+        delivery_fee_kobo: 0,
+        total_kobo: q.quoted_kobo,
+        eta: eta.toISOString().slice(0, 10),
+      },
+      p_items: [
+        {
+          kind: "custom",
+          name: `Bulk order — ${q.request}`.slice(0, 200),
+          qty: 1,
+          unit_price_kobo: q.quoted_kobo,
+          line_total_kobo: q.quoted_kobo,
+        },
+      ],
+      p_stock: [],
+      p_hold: "14 days",
+    });
+    if (error) throw new Error(`Couldn't create the order: ${error.message}`);
+    const o = order as { id: string; number: string };
+    ok(
+      await svc
+        .from("orders")
+        .update({ quote_id: id, note: q.response ?? "" })
+        .eq("id", o.id),
+      "Linking quote",
+    );
+    ok(
+      await svc.from("bulk_quotes").update({ status: "converted", order_id: o.id }).eq("id", id),
+      "Updating quote",
+    );
+    let paymentUrl: string | undefined;
+    if (q.email) {
+      paymentUrl = (await paymentLinkFor(o.id)).url;
+      await sendQuoteReply({
+        name: q.name,
+        email: q.email,
+        request: q.request,
+        response: q.response ?? "Your order is ready — pay below to confirm.",
+        amount: toNaira(q.quoted_kobo),
+        paymentUrl,
+      });
+    }
+    return { number: o.number, paymentUrl };
+  });
+
+// ── Discount codes ──────────────────────────────────────────
+export const listCodes = createServerFn({ method: "GET" }).handler(
+  async (): Promise<DiscountCode[]> => {
+    const db = await requireAdmin();
+    const rows = ok(
+      await db
+        .from("discount_codes")
+        .select("code, pct, active, uses")
+        .order("created_at", { ascending: false }),
+      "Loading codes",
+    );
+    return (rows as CodeRow[]).map(codeFromRow);
+  },
+);
+
+export const saveCode = createServerFn({ method: "POST" })
+  .validator((c: { code: string; pct: number; active: boolean }) =>
+    z
+      .object({
+        code: z.string().regex(/^[A-Z0-9]{3,20}$/),
+        pct: z.number().int().min(1).max(50),
+        active: z.boolean(),
+      })
+      .parse(c),
+  )
+  .handler(async ({ data }) => {
+    const db = await requireAdmin();
+    ok(await db.from("discount_codes").upsert(data, { onConflict: "code" }), "Saving code");
+  });
+
+/** Codes used by orders are deactivated instead (orders keep a reference to them). */
+export const deleteCode = createServerFn({ method: "POST" })
+  .validator((code: string) => z.string().max(20).parse(code))
+  .handler(async ({ data }) => {
+    const db = await requireAdmin();
+    const { data: used } = await db.from("discount_codes").select("uses").eq("code", data).single();
+    if (used && used.uses > 0)
+      ok(
+        await db.from("discount_codes").update({ active: false }).eq("code", data),
+        "Deactivating code",
+      );
+    else ok(await db.from("discount_codes").delete().eq("code", data), "Deleting code");
+  });

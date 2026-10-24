@@ -35,8 +35,6 @@ const IMG: Record<CategorySlug, string> = {
 
 type Raw = [string, CategorySlug, OccasionSlug[], number, number, number, number, NoiseLevel, string[], number, (string | undefined)?, boolean?];
 
-/** Index into a non-empty array with wrap-around (keeps strict index checks happy for seed data). */
-const pick = <T,>(arr: readonly T[], i: number): T => arr[((i % arr.length) + arr.length) % arr.length] as T;
 const RAW: Raw[] = [
   ["Royal Crown 100", "aerial-cakes", ["new-year", "church-crossover"], 85000, 60, 100, 40, "Loud", ["Gold", "Magenta"], 18, "2026-12-20", true],
   ["Owambe King 49", "aerial-cakes", ["wedding-entrance", "birthday"], 42000, 35, 49, 30, "Loud", ["Gold", "Emerald"], 24, undefined, true],
@@ -84,37 +82,6 @@ export const PRODUCTS: Product[] = RAW.map((r, i) => {
   };
 });
 
-const NAMES = ["Ifeoma A.", "Tari E.", "Ekaete U.", "Osas I.", "Bassey O.", "Ejiro M.", "Preye D.", "Uduak N."];
-const CITIES = ["Port Harcourt", "Yenagoa", "Calabar", "Warri", "Benin City", "Uyo", "Asaba", "Eket"];
-const BODIES = [
-  ["Pure fire!", "The whole street came out. Delivery to my house was on time and well packed."],
-  ["Owambe approved", "Used it for my sister's wedding entrance. Everybody brought out their phones!"],
-  ["Worth every naira", "Lasted longer than I expected. Will buy again for crossover."],
-  ["Good, but loud", "Very loud, warn your neighbours. Kids loved it."],
-  ["Clean and classy", "Beautiful colours, no wahala lighting it. Customer support on WhatsApp was quick."],
-];
-export const REVIEWS: Review[] = PRODUCTS.flatMap((p, i) =>
-  Array.from({ length: 2 + (i % 3) }, (_, j) => {
-    const k = (i + j) % BODIES.length;
-    const [title, body] = pick(BODIES, k);
-    const review: Review = {
-      id: `r${i}-${j}`,
-      productId: p.id,
-      author: pick(NAMES, i + j),
-      city: pick(CITIES, i * 2 + j),
-      rating: pick([5, 5, 4, 3, 5], k),
-      title: title!,
-      body: body!,
-      date: `2025-12-${String(10 + ((i + j) % 18)).padStart(2, "0")}`,
-      verified: j !== 2,
-      status: (i + j) % 11 === 0 ? "pending" : "approved",
-    };
-    if (j === 0) review.media = [{ type: "video", src: p.image }];
-    if (j === 1) review.media = [{ type: "photo", src: pick(p.gallery, 1) }];
-    return review;
-  }),
-);
-
 const pid = (slug: string) => PRODUCTS.find((p) => p.slug === slug)!.id;
 export const BUNDLES: Bundle[] = [
   { id: "b1", slug: "new-year-countdown-pack", name: "New Year Countdown Pack", tagline: "Everything for midnight", image: cake,
@@ -140,37 +107,6 @@ export const DELIVERY_ZONES: DeliveryZone[] = [
 export const CATEGORY_STATE_BLOCKS: Partial<Record<StateName, CategorySlug[]>> = {
   Bayelsa: ["rockets"],
 };
-
-const STATUSES = ["Processing", "Dispatched", "Out for Delivery", "Delivered"] as const;
-export const ORDERS: Order[] = Array.from({ length: 14 }, (_, i) => {
-  const p1 = pick(PRODUCTS, i * 3), p2 = pick(PRODUCTS, i * 5 + 2);
-  const zone = pick(DELIVERY_ZONES, i);
-  const city = pick(zone.cities, i);
-  const lines = [
-    { productId: p1.id, name: p1.name, qty: 1 + (i % 3), unitPrice: p1.price },
-    { productId: p2.id, name: p2.name, qty: i % 4 === 0 ? 12 : 2, unitPrice: p2.price },
-  ];
-  const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-  const discount = i % 4 === 0 ? Math.round(p2.price * 12 * 0.05) : 0;
-  const st = pick(STATUSES, i);
-  return {
-    id: `DS-${10240 + i}`,
-    createdAt: `2025-12-${String(1 + i).padStart(2, "0")}T10:00:00Z`,
-    customer: { name: pick(NAMES, i), email: `customer${i}@mail.ng`, phone: `0803 000 ${String(1000 + i)}` },
-    address: { state: zone.state, city: city.name, street: `${12 + i} Aba Road` },
-    lines, subtotal, discount, deliveryFee: city.fee, total: subtotal - discount + city.fee,
-    status: st,
-    history: STATUSES.slice(0, STATUSES.indexOf(st) + 1).map((s, j) => ({ status: s, at: `2025-12-${String(1 + i + j).padStart(2, "0")}T12:00:00Z` })),
-    eta: `2025-12-${String(3 + i).padStart(2, "0")}`,
-    payment: { provider: "paystack", reference: `PSK_${(904213 + i * 37).toString(36).toUpperCase()}`, channel: (["card", "bank_transfer", "ussd"] as const)[i % 3]!, status: "paid", paidAt: `2025-12-${String(1 + i).padStart(2, "0")}T10:02:00Z` },
-  };
-});
-
-export const QUOTES: BulkQuote[] = [
-  { id: "q1", name: "Pastor Emeka Obi", orgType: "Church", eventDate: "2026-12-31", state: "Rivers", city: "Port Harcourt", request: "Crossover display for 3,000 congregants", quantity: "Budget ₦1.5m", phone: "0803 111 2222", notes: "Need setup guidance", status: "New", createdAt: "2026-10-20" },
-  { id: "q2", name: "Glam Events by Ini", orgType: "Event planner", eventDate: "2026-11-14", state: "Akwa Ibom", city: "Uyo", request: "Cold spark machines x4, gold confetti x50", quantity: "54 units", phone: "0806 222 3333", notes: "", status: "Quoted", createdAt: "2026-10-12" },
-  { id: "q3", name: "Hotel Presidential", orgType: "Hotel", eventDate: "2026-12-31", state: "Rivers", city: "Port Harcourt", request: "Rooftop NYE show", quantity: "Budget ₦3m", phone: "0809 444 5555", notes: "Insurance docs required", status: "Converted", createdAt: "2026-09-30" },
-];
 
 export const DISCOUNT_CODES: DiscountCode[] = [
   { code: "DETTY10", pct: 10, active: true, uses: 142 },

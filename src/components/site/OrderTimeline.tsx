@@ -30,6 +30,14 @@ export const ORDER_STEPS: {
 ];
 
 export function OrderTimeline({ order }: { order: Order }) {
+  if (order.status === "Cancelled")
+    return (
+      <p className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+        This order was cancelled because payment wasn't completed in time. Nothing was charged —
+        place a new order any time.
+      </p>
+    );
+  // -1 while awaiting payment: no step is done yet.
   const current = ORDER_STEPS.findIndex((s) => s.status === order.status);
   return (
     <ol className="relative space-y-6" aria-label="Order progress">
@@ -74,6 +82,8 @@ export function OrderTimeline({ order }: { order: Order }) {
 
 export function StatusPill({ status }: { status: OrderStatus }) {
   const tone: Record<OrderStatus, string> = {
+    "Awaiting payment": "bg-secondary text-muted-foreground border-border",
+    Cancelled: "bg-destructive/15 text-destructive border-destructive/40",
     Processing: "bg-gold/15 text-gold border-gold/40",
     Dispatched: "bg-ember/15 text-ember border-ember/40",
     "Out for Delivery": "bg-magenta/15 text-magenta border-magenta/40",

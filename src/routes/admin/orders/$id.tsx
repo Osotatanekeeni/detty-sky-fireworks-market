@@ -5,8 +5,9 @@ import { PageHeader, Panel } from "@/components/admin/ui";
 import { formatDate, formatDateTime } from "@/components/site/forms";
 import { ORDER_STEPS, StatusPill } from "@/components/site/OrderTimeline";
 import { Button } from "@/components/ui/button";
-import { markOrderPaid, updateOrderStatus } from "@/lib/actions";
-import { useDb } from "@/lib/mock-db";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { createPaymentLink, getAdminOrder, markOrderPaid, setOrderStatus } from "@/lib/admin.functions";
 import { formatNaira } from "@/lib/pricing";
 import { formatArrives } from "@/lib/db-map";
 
@@ -14,8 +15,25 @@ export const Route = createFileRoute("/admin/orders/$id")({ component: OrderDeta
 
 function OrderDetail() {
   const { id } = Route.useParams();
-  const { orders } = useDb();
-  const o = orders.find((x) => x.id === id);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const { data: o, isPending } = useQuery({
+    queryKey: ["admin", "order", id],
+    queryFn: () => getAdminOrder({ data: id }),
+  });
+  const act = async (work: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    try {
+      await work();
+      toast.success(success);
+      await qc.invalidateQueries({ queryKey: ["admin"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (isPending) return <p className="text-muted-foreground">Loading order…</p>;
   if (!o)
     return (
       <p className="text-muted-foreground">
@@ -27,7 +45,7 @@ function OrderDetail() {
     );
   const current = ORDER_STEPS.findIndex((s) => s.status === o.status);
   const next = ORDER_STEPS[current + 1];
-  const unpaid = o.payment?.status === "pending";
+  const unpaid = o.status === "Awaiting payment";
 
   return (
     <div>
@@ -74,14 +92,13 @@ function OrderDetail() {
               {next ? (
                 <Button
                   variant="gold"
-                  disabled={unpaid}
-                  onClick={() => {
-                    updateOrderStatus(o.id, next.status);
-                    toast.success(`Marked ${next.label}`, {
-                      description: `Email sent to ${o.customer.email || "customer"} (demo)`,
-                      icon: <Mail className="h-4 w-4" />,
-                    });
-                  }}
+                  disabled={unpaid || busy || o.status === "Cancelled"}
+                  onClick={() =>
+                    void act(
+                      () => setOrderStatus({ data: { orderId: o.dbId, status: next.status } }),
+                      `Marked ${next.label.toLowerCase()} — customer emailed`,
+                    )
+                  }
                 >
                   Mark as {next.label.toLowerCase()}
                 </Button>
@@ -89,15 +106,29 @@ function OrderDetail() {
                 <p className="text-sm text-emerald">Delivered — all done.</p>
               )}
               {unpaid && (
-                <Button
-                  variant="glass"
-                  onClick={() => {
-                    markOrderPaid(o.id);
-                    toast.success("Marked as paid");
-                  }}
-                >
-                  Mark as paid (bank confirmation)
-                </Button>
+                <>
+                  <Button
+                    variant="glass"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(async () => {
+                        const { url } = await createPaymentLink({ data: o.dbId });
+                        await navigator.clipboard?.writeText(url);
+                      }, "Paystack link copied — send it to the customer")
+                    }
+                  >
+                    <Mail /> Copy payment link
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(() => markOrderPaid({ data: o.dbId }), "Marked as paid — receipt sent")
+                    }
+                  >
+                    Mark as paid (bank confirmation)
+                  </Button>
+                </>
               )}
             </div>
           </Panel>
@@ -177,7 +208,7 @@ function OrderDetail() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Channel</dt>
-                <dd>{o.payment?.channel.replace("_", " ") ?? "—"}</dd>
+                <dd>{o.payment?.channel?.replace("_", " ") || "—"}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Reference</dt>

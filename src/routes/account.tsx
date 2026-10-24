@@ -17,11 +17,11 @@ import {
 } from "@/components/site/forms";
 import { StatusPill } from "@/components/site/OrderTimeline";
 import { Button } from "@/components/ui/button";
-import { submitReview } from "@/lib/actions";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { myOrders, myReviews, submitReview } from "@/lib/orders.functions";
 import { useAddresses } from "@/lib/addresses";
 import { useAuth } from "@/lib/auth";
 import { useCatalogue } from "@/lib/catalogue";
-import { useDb } from "@/lib/mock-db";
 import { formatNaira } from "@/lib/pricing";
 import { useStore } from "@/lib/store";
 import type { Order, StateName } from "@/lib/types";
@@ -40,9 +40,8 @@ export const Route = createFileRoute("/account")({
 
 function Account() {
   const { user } = useAuth();
-  const { hydrated } = useDb();
   const { tab = "orders" } = Route.useSearch();
-  if (!hydrated || user === undefined)
+  if (user === undefined)
     return (
       <div className="mx-auto max-w-5xl px-4 py-24 text-center text-muted-foreground">Loading…</div>
     );
@@ -93,19 +92,19 @@ function Account() {
   );
 }
 
-function useMyOrders(): Order[] {
-  const { orderIds } = useStore();
+/** Signed-in customer's orders (guest orders with the same email attach on sign-in). */
+function useMyOrders() {
   const { user } = useAuth();
-  const { orders } = useDb();
-  return orders.filter(
-    (o) =>
-      orderIds.includes(o.id) ||
-      (user && o.customer.email.toLowerCase() === user.email.toLowerCase()),
-  );
+  return useQuery({
+    queryKey: ["my-orders", user?.id],
+    queryFn: () => myOrders(),
+    enabled: !!user,
+  });
 }
 
 function Orders() {
-  const orders = useMyOrders();
+  const { data: orders = [], isPending } = useMyOrders();
+  if (isPending) return <p className="text-sm text-muted-foreground">Loading orders…</p>;
   if (!orders.length)
     return (
       <Empty
@@ -285,17 +284,23 @@ function Addresses() {
 }
 
 function Reviews() {
-  const orders = useMyOrders();
-  const { reviews } = useDb();
+  const { data: orders = [] } = useMyOrders();
   const { products } = useCatalogue();
   const { user } = useAuth();
-  const [writing, setWriting] = useState<{ orderId: string; productId: string } | null>(null);
+  const qc = useQueryClient();
+  const { data: reviews = [] } = useQuery({
+    queryKey: ["my-reviews", user?.id],
+    queryFn: () => myReviews(),
+    enabled: !!user,
+  });
+  const [writing, setWriting] = useState<string | null>(null);
   const delivered = orders.filter((o) => o.status === "Delivered");
   const reviewable = delivered.flatMap((o) =>
-    o.lines.filter((l) => (l.kind ?? "product") === "product").map((l) => ({ order: o, line: l })),
+    o.lines
+      .filter((l) => (l.kind ?? "product") === "product" && l.itemId)
+      .map((l) => ({ order: o, line: l })),
   );
-  const done = (orderId: string, productId: string) =>
-    reviews.find((r) => r.orderId === orderId && r.productId === productId);
+  const done = (itemId: string | undefined) => reviews.find((r) => r.orderItemId === itemId);
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -311,8 +316,8 @@ function Reviews() {
       )}
       {reviewable.map(({ order, line }) => {
         const p = products.find((x) => x.id === line.productId);
-        const existing = done(order.id, line.productId);
-        const isWriting = writing?.orderId === order.id && writing.productId === line.productId;
+        const existing = done(line.itemId);
+        const isWriting = writing === line.itemId;
         return (
           <div key={order.id + line.productId} className="glass rounded-2xl p-4">
             <div className="flex items-center gap-3">
@@ -338,7 +343,7 @@ function Reviews() {
                   <Button
                     variant="gold"
                     size="sm"
-                    onClick={() => setWriting({ orderId: order.id, productId: line.productId })}
+                    onClick={() => setWriting(line.itemId ?? null)}
                   >
                     Write review
                   </Button>
@@ -348,17 +353,23 @@ function Reviews() {
             {isWriting && user && (
               <ReviewForm
                 onCancel={() => setWriting(null)}
-                onSubmit={(v) => {
-                  submitReview({
-                    ...v,
-                    productId: line.productId,
-                    orderId: order.id,
-                    author:
-                      `${user.name.split(" ")[0]} ${user.name.split(" ")[1]?.[0] ?? ""}.`.trim(),
-                    city: order.address.city,
-                  });
-                  setWriting(null);
-                  toast.success("Thanks! Your review will appear once approved.");
+                onSubmit={async (v) => {
+                  try {
+                    await submitReview({
+                      data: {
+                        orderItemId: line.itemId!,
+                        productId: line.productId,
+                        rating: v.rating,
+                        title: v.title,
+                        body: v.body,
+                      },
+                    });
+                    await qc.invalidateQueries({ queryKey: ["my-reviews"] });
+                    setWriting(null);
+                    toast.success("Thanks! Your review will appear once approved.");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Couldn't send your review");
+                  }
                 }}
               />
             )}

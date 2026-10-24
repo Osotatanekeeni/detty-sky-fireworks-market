@@ -15,11 +15,10 @@ import { toKobo } from "../src/lib/db-map";
 const q = (v: string | null | undefined) => (v == null ? "null" : `'${v.replace(/'/g, "''")}'`);
 const arr = (xs: string[]) => `array[${xs.map(q).join(", ")}]::text[]`;
 /** Vite turns asset imports into URLs; Bun gives a file path. Either way, keep the file name. */
-const img = (src: string) =>
-  `/images/products/${src
-    .split("/")
-    .pop()!
-    .replace(/-[\w]{8}(\.\w+)$/, "$1")}`;
+const img = (src: string) => {
+  const file = src.split("/").pop()!; // "p-cake.jpg" (Bun) or "p-cake-DEDNMAFX.jpg" (Vite)
+  return `/images/products/${file.replace(/^(p-[a-z]+)-[\w-]{8}(\.\w+)$/, "$1$2")}`;
+};
 
 const out: string[] = ["begin;"];
 

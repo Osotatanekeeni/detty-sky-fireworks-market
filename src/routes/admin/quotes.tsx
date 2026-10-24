@@ -5,9 +5,8 @@ import { toast } from "sonner";
 import { AdminField, PageHeader, Panel, adminInput, adminTextarea } from "@/components/admin/ui";
 import { formatDate } from "@/components/site/forms";
 import { Button } from "@/components/ui/button";
-import { convertQuoteToOrder, updateQuote } from "@/lib/actions";
-import { useCatalogue } from "@/lib/catalogue";
-import { useDb } from "@/lib/mock-db";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { convertQuoteToOrder, listQuotes, updateQuote } from "@/lib/admin.functions";
 import { formatNaira } from "@/lib/pricing";
 import type { BulkQuote, QuoteStatus } from "@/lib/types";
 
@@ -22,11 +21,11 @@ const tone: Record<QuoteStatus, string> = {
 };
 
 function Quotes() {
-  const { quotes } = useDb();
+  const { data: quotes = [] } = useQuery({ queryKey: ["admin", "quotes"], queryFn: () => listQuotes() });
   const [filter, setFilter] = useState<QuoteStatus | "">("");
   const list = quotes.filter((q) => !filter || q.status === filter);
-  const [selectedId, setSelectedId] = useState<string | null>(list[0]?.id ?? null);
-  const selected = quotes.find((q) => q.id === selectedId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = quotes.find((q) => q.id === (selectedId ?? list[0]?.id));
   return (
     <div>
       <PageHeader
@@ -52,8 +51,8 @@ function Quotes() {
               <li key={q.id}>
                 <button
                   onClick={() => setSelectedId(q.id)}
-                  aria-current={q.id === selectedId}
-                  className={`w-full rounded-xl p-3 text-left ${q.id === selectedId ? "bg-secondary" : "hover:bg-secondary/50"}`}
+                  aria-current={q.id === selected?.id}
+                  className={`w-full rounded-xl p-3 text-left ${q.id === selected?.id ? "bg-secondary" : "hover:bg-secondary/50"}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold">{q.name}</span>
@@ -89,7 +88,22 @@ function Quotes() {
 
 function QuoteDetail({ q }: { q: BulkQuote }) {
   const nav = useNavigate();
-  const { zones } = useCatalogue();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const act = async <T,>(work: () => Promise<T>, success: (r: T) => string) => {
+    setBusy(true);
+    try {
+      const r = await work();
+      toast.success(success(r));
+      await qc.invalidateQueries({ queryKey: ["admin"] });
+      return r;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  };
   const [response, setResponse] = useState(q.response ?? "");
   const [amount, setAmount] = useState(q.quotedAmount ? String(q.quotedAmount) : "");
   useEffect(() => {
@@ -170,17 +184,22 @@ function QuoteDetail({ q }: { q: BulkQuote }) {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="gold"
-              disabled={!response.trim() || !amt}
-              onClick={() => {
-                updateQuote(q.id, {
-                  status: "Quoted",
-                  response: response.trim(),
-                  quotedAmount: amt,
-                });
-                toast.success("Quote saved", {
-                  description: q.email ? `Emailed to ${q.email} (demo)` : "Send it on WhatsApp too",
-                });
-              }}
+              disabled={!response.trim() || !amt || busy}
+              onClick={() =>
+                void act(
+                  () =>
+                    updateQuote({
+                      data: {
+                        id: q.id,
+                        status: "Quoted",
+                        response: response.trim(),
+                        quotedAmount: amt,
+                        notify: true,
+                      },
+                    }),
+                  () => (q.email ? `Quote saved and emailed to ${q.email}` : "Quote saved — send it on WhatsApp"),
+                )
+              }
             >
               Save & send quote
             </Button>
@@ -192,12 +211,14 @@ function QuoteDetail({ q }: { q: BulkQuote }) {
             {q.status === "Quoted" && (
               <Button
                 variant="paystack"
-                onClick={() => {
-                  const o = convertQuoteToOrder(zones, q.id);
-                  if (o) {
-                    toast.success(`Order ${o.id} created — awaiting payment`);
-                    nav({ to: "/admin/orders/$id", params: { id: o.id } });
-                  }
+                disabled={busy}
+                onClick={async () => {
+                  const o = await act(
+                    () => convertQuoteToOrder({ data: q.id }),
+                    (r) =>
+                      `Order ${r.number} created${r.paymentUrl ? " — Paystack link emailed" : " — no email on file, copy the payment link from the order"}`,
+                  );
+                  if (o) nav({ to: "/admin/orders/$id", params: { id: o.number } });
                 }}
               >
                 Convert to order
@@ -206,10 +227,10 @@ function QuoteDetail({ q }: { q: BulkQuote }) {
             {q.status !== "Closed" && (
               <Button
                 variant="ghost"
-                onClick={() => {
-                  updateQuote(q.id, { status: "Closed" });
-                  toast("Quote closed");
-                }}
+                disabled={busy}
+                onClick={() =>
+                  void act(() => updateQuote({ data: { id: q.id, status: "Closed" } }), () => "Quote closed")
+                }
               >
                 Close
               </Button>

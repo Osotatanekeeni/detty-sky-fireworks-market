@@ -8,28 +8,14 @@ import {
   Megaphone,
   MessageSquareQuote,
   Package,
-  RotateCcw,
   ShoppingCart,
   Sparkles,
   Star,
   Truck,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { listReviews } from "@/lib/admin.functions";
+import { useQuery } from "@tanstack/react-query";
+import { listQuotes, listReviews } from "@/lib/admin.functions";
 import { getViewer } from "@/lib/auth.functions";
-import { db, useDb } from "@/lib/mock-db";
 import { supabaseBrowser } from "@/lib/supabase.browser";
 
 export const Route = createFileRoute("/admin")({
@@ -64,19 +50,19 @@ function AdminLayout() {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const router = useRouter();
-  const { quotes, hydrated } = useDb();
   const isLogin = pathname === "/admin/login";
-  const [pendingReviews, setPendingReviews] = useState(0);
-
-  useEffect(() => {
-    db.hydrate();
-  }, []);
-  useEffect(() => {
-    if (isLogin) return;
-    listReviews()
-      .then((rs) => setPendingReviews(rs.filter((r) => r.status === "pending").length))
-      .catch(() => {});
-  }, [isLogin, pathname]);
+  const signedIn = !isLogin && !!viewer;
+  const { data: quotes = [] } = useQuery({
+    queryKey: ["admin", "quotes"],
+    queryFn: () => listQuotes(),
+    enabled: signedIn,
+  });
+  const { data: reviews = [] } = useQuery({
+    queryKey: ["admin", "reviews"],
+    queryFn: () => listReviews(),
+    enabled: signedIn,
+  });
+  const pendingReviews = reviews.filter((r) => r.status === "pending").length;
 
   const signOut = async () => {
     await supabaseBrowser().auth.signOut();
@@ -85,7 +71,7 @@ function AdminLayout() {
   };
 
   if (isLogin) return <Outlet />;
-  if (!viewer || !hydrated)
+  if (!viewer)
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Checking access…
@@ -149,7 +135,6 @@ function AdminLayout() {
           </nav>
           <div className="hidden space-y-1 p-3 lg:absolute lg:bottom-0 lg:block lg:w-full">
             <p className="truncate px-3 text-xs text-muted-foreground">{viewer.email}</p>
-            <ResetDemo />
             <button
               onClick={signOut}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent"
@@ -171,36 +156,5 @@ function AdminLayout() {
         </div>
       </main>
     </div>
-  );
-}
-
-/** Mock-only: wipes this browser's demo orders, quotes and codes. Delete with the mock layer. */
-function ResetDemo() {
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent">
-        <RotateCcw className="h-4 w-4" /> Reset demo data
-      </AlertDialogTrigger>
-      <AlertDialogContent className="bg-card">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Reset demo data?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Demo orders, quotes and discount codes in this browser go back to the sample data.
-            Products and settings live in Supabase and aren't affected.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              db.reset();
-              toast.success("Demo data reset");
-            }}
-          >
-            Reset
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

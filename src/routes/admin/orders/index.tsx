@@ -5,16 +5,27 @@ import { PageHeader, Panel, TableWrap, adminInput, td, th } from "@/components/a
 import { formatDate } from "@/components/site/forms";
 import { StatusPill } from "@/components/site/OrderTimeline";
 import { STATES } from "@/lib/data";
-import { useDb } from "@/lib/mock-db";
+import { useQuery } from "@tanstack/react-query";
+import { listOrders } from "@/lib/admin.functions";
 import { formatNaira } from "@/lib/pricing";
 import type { OrderStatus, StateName } from "@/lib/types";
 
 export const Route = createFileRoute("/admin/orders/")({ component: Orders });
 
-const STATUSES: OrderStatus[] = ["Processing", "Dispatched", "Out for Delivery", "Delivered"];
+const STATUSES: OrderStatus[] = [
+  "Awaiting payment",
+  "Processing",
+  "Dispatched",
+  "Out for Delivery",
+  "Delivered",
+  "Cancelled",
+];
 
 function Orders() {
-  const { orders } = useDb();
+  const { data: orders = [], isPending } = useQuery({
+    queryKey: ["admin", "orders"],
+    queryFn: () => listOrders(),
+  });
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<OrderStatus | "">("");
   const [state, setState] = useState<StateName | "">("");
@@ -117,7 +128,7 @@ function Orders() {
         </TableWrap>
         {!list.length && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No orders match those filters.
+            {isPending ? "Loading orders…" : "No orders match those filters."}
           </p>
         )}
       </Panel>

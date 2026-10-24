@@ -1,4 +1,4 @@
-# Supabase setup
+# Backend setup (Supabase, Paystack, Resend)
 
 One-time setup for a new environment (dev first, then prod).
 
@@ -10,6 +10,7 @@ One-time setup for a new environment (dev first, then prod).
    ```sh
    export SUPABASE_DB_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-eu-west-2.pooler.supabase.com:5432/postgres'
    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261024000000_init.sql
+   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261024010000_phase2.sql
    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
    npx -y bun@1 scripts/seed-products.ts > /tmp/seed-products.sql
    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/seed-products.sql
@@ -30,5 +31,28 @@ One-time setup for a new environment (dev first, then prod).
 
    Then sign in at `/admin/login`.
 
-Production: set the same three values as Cloudflare Worker variables (`VITE_*` at build time,
-`SUPABASE_SERVICE_ROLE_KEY` as a secret: `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`).
+6. **pg_cron.** The phase 2 migration schedules `release_expired_holds()` every 5 minutes. If it
+   printed "pg_cron not available", enable pg_cron under Database → Extensions and run:
+   `select cron.schedule('release-expired-holds', '*/5 * * * *', 'select public.release_expired_holds()');`
+7. **Auth emails.** Authentication → Emails → SMTP: point it at Resend (smtp.resend.com, port 465,
+   user `resend`, password = your Resend API key) so confirmation emails come from your domain
+   and aren't rate-limited by Supabase's built-in sender.
+
+## Paystack
+
+1. Dashboard → Settings → API Keys & Webhooks. Copy the **test** secret key into
+   `PAYSTACK_SECRET_KEY`. Set the webhook URL to `https://<your-domain>/api/paystack/webhook`
+   (for local testing, expose port 8080 with `cloudflared tunnel --url http://localhost:8080`).
+2. Paystack must approve the business for live payments — fireworks may need extra documents.
+   If they decline the category, Kora is the fallback (CLAUDE.md).
+3. Without keys, set `PAYSTACK_SIMULATE=1` locally to "pay" instantly (never works in production).
+
+## Resend
+
+Add and verify your domain (DNS records) at resend.com, then set `RESEND_API_KEY` and
+`EMAIL_FROM`. Emails sent: order receipt, Dispatched / Out for delivery / Delivered, and bulk
+quote replies (with a Paystack link once a quote is converted).
+
+Production: set the `VITE_*` values at build time and the server values as Cloudflare Worker
+secrets (`npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`, same for `PAYSTACK_SECRET_KEY`,
+`RESEND_API_KEY`), plus `SITE_URL` and `EMAIL_FROM` as plain variables.

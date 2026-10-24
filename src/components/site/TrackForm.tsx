@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { findOrderForTracking } from "@/lib/services";
+import { getOrder } from "@/lib/orders.functions";
+import { rememberTrackingPhone } from "@/lib/tracking";
 import { Field, inputClass } from "./forms";
 
 export function TrackForm({
@@ -15,6 +16,7 @@ export function TrackForm({
   const [id, setId] = useState(initialId);
   const [phone, setPhone] = useState("");
   const [miss, setMiss] = useState(false);
+  const [busy, setBusy] = useState(false);
   return (
     <div className="mx-auto max-w-md px-4 py-20">
       <p className="text-xs uppercase tracking-[0.2em] text-magenta">Track an order</p>
@@ -29,14 +31,18 @@ export function TrackForm({
       ) : null}
       <form
         className="mt-6 space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          const o = findOrderForTracking(id, phone);
+          const number = id.trim().toUpperCase();
+          setBusy(true);
+          const o = await getOrder({ data: { number, phone } }).catch(() => null);
+          setBusy(false);
           if (!o) {
             setMiss(true);
             return;
           }
-          nav({ to: "/order/$id", params: { id: o.id }, search: { phone } });
+          rememberTrackingPhone(o.id, phone);
+          nav({ to: "/order/$id", params: { id: o.id } });
         }}
       >
         <Field label="Order number" htmlFor="t-id">
@@ -67,7 +73,7 @@ export function TrackForm({
             className={inputClass}
           />
         </Field>
-        <Button type="submit" variant="gold" size="lg" className="w-full">
+        <Button type="submit" variant="gold" size="lg" className="w-full" disabled={busy}>
           Track order
         </Button>
       </form>

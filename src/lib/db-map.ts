@@ -3,13 +3,19 @@
 import { STATES } from "./data";
 import type {
   Banner,
+  BulkQuote,
   Bundle,
   Campaign,
   CategorySlug,
   DeliveryZone,
+  DiscountCode,
   NoiseLevel,
   OccasionSlug,
+  Order,
+  OrderStatus,
+  PaymentStatus,
   Product,
+  QuoteStatus,
   Review,
   StateName,
 } from "./types";
@@ -243,3 +249,177 @@ export function formatArrives(arrives: string) {
     timeZone: "Africa/Lagos",
   });
 }
+
+// ── Orders, quotes, codes ───────────────────────────────────
+export type DbOrderStatus =
+  | "pending_payment"
+  | "processing"
+  | "dispatched"
+  | "out_for_delivery"
+  | "delivered"
+  | "cancelled";
+
+const STATUS_TO_UI: Record<DbOrderStatus, OrderStatus> = {
+  pending_payment: "Awaiting payment",
+  processing: "Processing",
+  dispatched: "Dispatched",
+  out_for_delivery: "Out for Delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+export const statusToUi = (s: DbOrderStatus) => STATUS_TO_UI[s];
+export const statusToDb = (s: OrderStatus) =>
+  (Object.keys(STATUS_TO_UI) as DbOrderStatus[]).find((k) => STATUS_TO_UI[k] === s)!;
+
+export interface OrderRow {
+  id: string;
+  number: string;
+  email: string;
+  customer_name: string;
+  phone: string;
+  state: StateName;
+  city: string;
+  street: string;
+  status: DbOrderStatus;
+  subtotal_kobo: number;
+  bulk_discount_kobo: number;
+  code: string | null;
+  code_discount_kobo: number;
+  delivery_fee_kobo: number;
+  total_kobo: number;
+  eta: string | null;
+  quote_id: string | null;
+  note: string;
+  created_at: string;
+  order_items: {
+    id: string;
+    kind: "product" | "bundle" | "custom";
+    product_id: string | null;
+    bundle_id: string | null;
+    name: string;
+    qty: number;
+    unit_price_kobo: number;
+    line_total_kobo: number;
+    preorder_arrives: string | null;
+  }[];
+  order_status_events: { status: DbOrderStatus; created_at: string }[];
+  payments: {
+    provider: string;
+    reference: string;
+    channel: string | null;
+    status: PaymentStatus;
+    created_at: string;
+    paid_at: string | null;
+  }[];
+}
+
+export const ORDER_SELECT =
+  "id, number, email, customer_name, phone, state, city, street, status, subtotal_kobo, bulk_discount_kobo, code, code_discount_kobo, delivery_fee_kobo, total_kobo, eta, quote_id, note, created_at, order_items(id, kind, product_id, bundle_id, name, qty, unit_price_kobo, line_total_kobo, preorder_arrives), order_status_events(status, created_at), payments(provider, reference, channel, status, created_at, paid_at)";
+
+/** `limited`: the caller only proved the phone number — hide email and most of the street. */
+export function orderFromRow(r: OrderRow, limited = false): Order {
+  const pay = [...r.payments].sort((a, b) =>
+    a.status === "paid" ? -1 : b.status === "paid" ? 1 : b.created_at.localeCompare(a.created_at),
+  )[0];
+  const history = [...r.order_status_events]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((e) => ({ status: statusToUi(e.status), at: e.created_at }));
+  return {
+    id: r.number,
+    dbId: r.id,
+    createdAt: r.created_at,
+    customer: {
+      name: r.customer_name,
+      email: limited ? "" : r.email,
+      phone: limited ? `••• ${r.phone.replace(/\D/g, "").slice(-4)}` : r.phone,
+    },
+    address: { state: r.state, city: r.city, street: limited ? "" : r.street },
+    lines: r.order_items.map((i) => ({
+      productId: i.product_id ?? i.bundle_id ?? "custom",
+      kind: i.kind,
+      name: i.name,
+      qty: i.qty,
+      unitPrice: toNaira(i.unit_price_kobo),
+      itemId: i.id,
+      ...(i.preorder_arrives ? { preorderArrives: i.preorder_arrives } : {}),
+    })),
+    subtotal: toNaira(r.subtotal_kobo),
+    discount: toNaira(r.bulk_discount_kobo),
+    deliveryFee: toNaira(r.delivery_fee_kobo),
+    total: toNaira(r.total_kobo),
+    status: statusToUi(r.status),
+    history,
+    eta: r.eta ?? "",
+    ...(r.code ? { code: r.code, codeDiscount: toNaira(r.code_discount_kobo) } : {}),
+    ...(pay
+      ? {
+          payment: {
+            provider: pay.provider,
+            reference: limited ? "" : pay.reference,
+            channel: pay.channel ?? "",
+            status: pay.status,
+            ...(pay.paid_at ? { paidAt: pay.paid_at } : {}),
+          },
+        }
+      : {}),
+    ...(r.quote_id ? { quoteId: r.quote_id } : {}),
+    ...(r.note ? { note: r.note } : {}),
+    ...(limited ? { limited: true } : {}),
+  };
+}
+
+export type DbQuoteStatus = "new" | "quoted" | "converted" | "closed";
+export interface QuoteRow {
+  id: string;
+  name: string;
+  org_type: string;
+  event_date: string;
+  state: StateName;
+  city: string;
+  request: string;
+  quantity: string;
+  phone: string;
+  email: string | null;
+  notes: string;
+  status: DbQuoteStatus;
+  response: string | null;
+  quoted_kobo: number | null;
+  order_id: string | null;
+  created_at: string;
+  orders?: { number: string } | null;
+}
+export const QUOTE_SELECT = "*, orders!bulk_quotes_order_id_fkey(number)";
+const QUOTE_STATUS: Record<DbQuoteStatus, QuoteStatus> = {
+  new: "New",
+  quoted: "Quoted",
+  converted: "Converted",
+  closed: "Closed",
+};
+export const quoteStatusToDb = (s: QuoteStatus) => s.toLowerCase() as DbQuoteStatus;
+
+export const quoteFromRow = (r: QuoteRow): BulkQuote => ({
+  id: r.id,
+  name: r.name,
+  orgType: r.org_type,
+  eventDate: r.event_date,
+  state: r.state,
+  city: r.city,
+  request: r.request,
+  quantity: r.quantity,
+  phone: r.phone,
+  notes: r.notes,
+  status: QUOTE_STATUS[r.status],
+  createdAt: r.created_at.slice(0, 10),
+  ...(r.email ? { email: r.email } : {}),
+  ...(r.response ? { response: r.response } : {}),
+  ...(r.quoted_kobo != null ? { quotedAmount: toNaira(r.quoted_kobo) } : {}),
+  ...(r.orders?.number ? { orderId: r.orders.number } : {}),
+});
+
+export interface CodeRow {
+  code: string;
+  pct: number;
+  active: boolean;
+  uses: number;
+}
+export const codeFromRow = (r: CodeRow): DiscountCode => ({ ...r });

@@ -1,10 +1,9 @@
 // Per-browser shopping state: cart, wishlist, chosen delivery state and orders placed from this
-// browser. The signed-in user lives in auth.tsx (Supabase Auth) and saved addresses in
-// addresses.ts (the `addresses` table).
+// browser (with their Paystack reference — what lets a guest see the order again). The signed-in
+// user lives in auth.tsx and saved addresses in addresses.ts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCatalogue } from "./catalogue";
 import { priceCart } from "./checkout";
-import { db, useDb } from "./mock-db";
 import type { StateName } from "./types";
 
 export interface CartLine { key: string; productId?: string; bundleId?: string; qty: number; }
@@ -12,16 +11,18 @@ export interface CartLine { key: string; productId?: string; bundleId?: string; 
 interface Store {
   cart: CartLine[];
   wishlist: string[];
-  /** Order ids placed from this browser (so guests can find them again). */
-  orderIds: string[];
+  /** Order number → Paystack reference, for orders placed from this browser. */
+  orderRefs: Record<string, string>;
   deliveryState: StateName | null;
   bump: number;
+  /** false until localStorage has been read (first client effect). */
+  loaded: boolean;
   add: (line: Omit<CartLine, "key">) => void;
   setQty: (key: string, qty: number) => void;
   remove: (key: string) => void;
   clear: () => void;
   toggleWish: (id: string) => void;
-  rememberOrder: (id: string) => void;
+  rememberOrder: (number: string, reference: string) => void;
   setDeliveryState: (s: StateName | null) => void;
 }
 
@@ -31,26 +32,25 @@ const KEY = "detty-sky-v1";
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [wishlist, setWish] = useState<string[]>([]);
-  const [orderIds, setOrderIds] = useState<string[]>([]);
+  const [orderRefs, setOrderRefs] = useState<Record<string, string>>({});
   const [deliveryState, setDeliveryState] = useState<StateName | null>(null);
   const [bump, setBump] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    db.hydrate();
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || "{}");
       setCart(s.cart ?? []); setWish(s.wishlist ?? []);
-      setOrderIds(s.orderIds ?? []); setDeliveryState(s.deliveryState ?? null);
+      setOrderRefs(s.orderRefs ?? {}); setDeliveryState(s.deliveryState ?? null);
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ cart, wishlist, orderIds, deliveryState }));
+      localStorage.setItem(KEY, JSON.stringify({ cart, wishlist, orderRefs, deliveryState }));
     } catch { /* ignore */ }
-  }, [cart, wishlist, orderIds, deliveryState, loaded]);
+  }, [cart, wishlist, orderRefs, deliveryState, loaded]);
 
   const add = useCallback((l: Omit<CartLine, "key">) => {
     const key = l.productId ? `p:${l.productId}` : `b:${l.bundleId}`;
@@ -62,12 +62,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: Store = {
-    cart, wishlist, orderIds, deliveryState, bump, add,
+    cart, wishlist, orderRefs, deliveryState, bump, loaded, add,
     setQty: (key, qty) => setCart((c) => c.map((x) => (x.key === key ? { ...x, qty: Math.max(1, qty) } : x))),
     remove: (key) => setCart((c) => c.filter((x) => x.key !== key)),
     clear: () => setCart([]),
     toggleWish: (id) => setWish((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])),
-    rememberOrder: (id) => setOrderIds((ids) => (ids.includes(id) ? ids : [id, ...ids])),
+    rememberOrder: (number, reference) => setOrderRefs((r) => ({ ...r, [number]: reference })),
     setDeliveryState,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -83,9 +83,8 @@ export function useStore() {
 export function useCartDetails() {
   const { cart } = useStore();
   const catalogue = useCatalogue();
-  const { codes } = useDb();
   return useMemo(() => {
-    const priced = priceCart({ ...catalogue, codes }, { lines: cart });
+    const priced = priceCart({ ...catalogue, codes: [] }, { lines: cart });
     const lines = priced.lines.map((l) => ({
       ...l,
       key: l.key,
@@ -95,5 +94,5 @@ export function useCartDetails() {
     }));
     const count = lines.reduce((s, l) => s + l.qty, 0);
     return { lines, subtotal: priced.subtotal, discount: priced.bulkDiscount, total: priced.subtotal - priced.bulkDiscount, count };
-  }, [cart, catalogue, codes]);
+  }, [cart, catalogue]);
 }

@@ -64,7 +64,8 @@ export interface Bundle {
 export interface City { name: string; fee: number; days: number; }
 export interface DeliveryZone { state: StateName; cities: City[]; }
 
-export type OrderStatus = "Processing" | "Dispatched" | "Out for Delivery" | "Delivered";
+/** The delivery timeline is the last four; "Awaiting payment" and "Cancelled" sit outside it. */
+export type OrderStatus = "Awaiting payment" | "Processing" | "Dispatched" | "Out for Delivery" | "Delivered" | "Cancelled";
 export interface OrderLine {
   /** Product id, or bundle id when `kind` is "bundle", or "custom" for admin-created lines (e.g. converted bulk quotes). */
   productId: string;
@@ -73,11 +74,16 @@ export interface OrderLine {
   qty: number;
   unitPrice: number;
   preorderArrives?: string;
+  /** order_items.id — what a review is tied to. */
+  itemId?: string;
 }
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
-export interface Payment { provider: "paystack"; reference: string; channel: "card" | "bank_transfer" | "ussd" | "manual"; status: PaymentStatus; paidAt?: string; }
+export interface Payment { provider: string; reference: string; channel: string; status: PaymentStatus; paidAt?: string; }
 export interface Order {
+  /** The order number customers see, e.g. "DS-10300". */
   id: string;
+  /** orders.id (uuid). */
+  dbId: string;
   createdAt: string;
   customer: { name: string; email: string; phone: string };
   address: { state: StateName; city: string; street: string };
@@ -96,6 +102,8 @@ export interface Order {
   /** Set when an order was created from a bulk quote. */
   quoteId?: string;
   note?: string;
+  /** Set when the caller only proved they know the phone number: no email, partial street. */
+  limited?: boolean;
 }
 
 export type QuoteStatus = "New" | "Quoted" | "Converted" | "Closed";

@@ -15,11 +15,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { deleteCode, saveCode } from "@/lib/actions";
 import {
   deleteBanner,
   deleteBundle,
+  deleteCode,
   listBanners,
+  listCodes,
+  saveCode,
   newId,
   saveBanner,
   saveBundle,
@@ -28,7 +30,6 @@ import {
 import { useAdminWrite } from "@/lib/admin-write";
 import { useCatalogue } from "@/lib/catalogue";
 import { STOCK_IMAGES } from "@/lib/data";
-import { useDb } from "@/lib/mock-db";
 import { formatNaira } from "@/lib/pricing";
 import type { Banner, Bundle } from "@/lib/types";
 
@@ -115,7 +116,14 @@ function CampaignTab() {
 }
 
 function CodesTab() {
-  const { codes } = useDb();
+  const qc = useQueryClient();
+  const write = useAdminWrite();
+  const { data: codes = [] } = useQuery({ queryKey: ["admin", "codes"], queryFn: () => listCodes() });
+  const run = async (work: Promise<unknown>, msg: string) => {
+    const ok = await write(work, msg);
+    await qc.invalidateQueries({ queryKey: ["admin", "codes"] });
+    return ok;
+  };
   const [code, setCode] = useState("");
   const [pct, setPct] = useState("10");
   return (
@@ -123,7 +131,7 @@ function CodesTab() {
       <Panel title="New code" className="max-w-2xl">
         <form
           className="flex flex-wrap items-end gap-3"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const c = code.trim().toUpperCase();
             const p = Number(pct);
@@ -139,9 +147,8 @@ function CodesTab() {
               toast.error("That code already exists");
               return;
             }
-            saveCode({ code: c, pct: p, active: true, uses: 0 });
-            setCode("");
-            toast.success(`${c} created`);
+            if (await run(saveCode({ data: { code: c, pct: p, active: true } }), `${c} created`))
+              setCode("");
           }}
         >
           <AdminField label="Code" htmlFor="dc-code">
@@ -189,17 +196,24 @@ function CodesTab() {
                 <td className={td}>
                   <Toggle
                     checked={c.active}
-                    onChange={(v) => saveCode({ ...c, active: v })}
+                    onChange={(v) =>
+                      void run(
+                        saveCode({ data: { code: c.code, pct: c.pct, active: v } }),
+                        v ? `${c.code} on` : `${c.code} off`,
+                      )
+                    }
                     label={`${c.code} active`}
                   />
                 </td>
                 <td className={`${td} text-right`}>
                   <button
                     aria-label={`Delete ${c.code}`}
-                    onClick={() => {
-                      deleteCode(c.code);
-                      toast(`${c.code} deleted`);
-                    }}
+                    onClick={() =>
+                      void run(
+                        deleteCode({ data: c.code }),
+                        c.uses ? `${c.code} has been used, so it was switched off` : `${c.code} deleted`,
+                      )
+                    }
                     className="text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />

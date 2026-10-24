@@ -65,6 +65,7 @@ Never edit `src/routeTree.gen.ts` by hand. Don't add plugins to `vite.config.ts`
 ```
 src/
   routes/                 file routes (see src/routes/README.md for conventions)
+    api/paystack/webhook  POST: verify x-paystack-signature → confirm_payment
     index, shop, product.$slug, bundles, cart      ← Lovable
     checkout, order.$id, track, account, bulk, safety, delivery
     admin.tsx             admin layout + guard;  admin/*  dashboard, orders, products, inventory,
@@ -90,30 +91,37 @@ src/
     supabase.server.ts    supabaseForRequest (cookie session, RLS) · supabasePublic · supabaseService
     supabase.browser.ts   browser client (NOT *.client.ts — import protection denies those to SSR)
     supabase-env.ts       VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY
-    mock-db.ts            in-browser mock of orders, quotes, codes, review submissions — TEMPORARY
-    actions.ts            mock WRITE functions for those → become server functions in Phase 2
+    checkout.functions.ts checkCode, createCheckout (priceCart → place_order → Paystack init),
+                          verifyPayment, retryPayment
+    orders.functions.ts   getOrder (owner/admin, payment ref, or number+phone → limited view),
+                          myOrders, submitQuote, myReviews, submitReview
+    payments.server.ts    confirmPayment (confirm_payment + receipt exactly once), verifyAndConfirm,
+                          loadOrder
+    paystack.server.ts    initialize / verify / webhook signature (+ PAYSTACK_SIMULATE for dev)
+    email.server.ts       Resend: receipt, status updates, quote replies (logs when no key)
+    tracking.ts           guest tracking phone kept in sessionStorage, never in the URL
     checkout.ts           priceCart(): the ONE pricing function (bulk tiers, codes, delivery,
                           kill switch, stock - reserved). Used by cart, checkout and placeOrder
     pricing.ts            tier maths + formatNaira
-    store.tsx             per-browser state: cart, wishlist, "deliver to" state, order ids
+    store.tsx             per-browser state: cart, wishlist, "deliver to" state, order → payment ref
 scripts/seed-products.ts  data.ts catalogue → idempotent SQL (pipe into psql)
 supabase/
   README.md                            project setup, step by step
   migrations/20261024000000_init.sql   full schema, RLS, stock/payment functions (tested on PG16)
+  migrations/20261024010000_phase2.sql pg_cron hold release; set_order_status forward-only
   seed.sql                             categories, occasions, delivery cities, codes, campaign
 public/images/products/   catalogue images until Phase 3 moves media to R2
 ```
 
-### Data layer (current state, after Phase 1)
+### Data layer (current state, after Phase 2 — no mock left)
 
-- **Supabase:** the catalogue (products, bundles, reviews, zones, kill switch, banners, campaign),
-  auth, profiles and addresses. Components read the catalogue with `useCatalogue()` (or
-  `loadCatalogue(context.queryClient)` in a loader) and pass it to `services.ts` helpers. Admin
-  writes go through `admin.functions.ts` via `useAdminWrite()`.
-- **Still mock (localStorage `detty-sky-mockdb-v2`) until Phase 2:** orders, bulk quotes, discount
-  codes and review submissions. Read with `useDb()`, write via `actions.ts`. Pages showing them
-  wait for `hydrated`. The mock checkout doesn't touch stock. Admin → "Reset demo data" resets
-  only these.
+- **Catalogue** (products, bundles, approved reviews, zones, kill switch, banners, campaign):
+  `useCatalogue()` / `loadCatalogue(context.queryClient)`, passed to `services.ts` helpers. Admin
+  writes: `admin.functions.ts` via `useAdminWrite()`.
+- **Orders, quotes, codes, reviews:** server functions only (`checkout.functions.ts`,
+  `orders.functions.ts`, admin ones in `admin.functions.ts`), read with TanStack Query
+  (`["admin", …]` keys for admin lists; invalidate `["admin"]` after admin actions).
+- **Local dev without Paystack:** `PAYSTACK_SIMULATE=1` (see .env.example).
 - Admin access: sign in at `/admin/login` with an account whose `profiles.role = 'admin'`
   (see supabase/README.md). `/admin` is guarded in `beforeLoad` with `getViewer()`.
 
@@ -209,7 +217,7 @@ Work phase by phase on a branch per phase. Keep the mock working until its repla
   (`lib/supabase.server.ts`, `lib/supabase.browser.ts`). Swap `services.ts` reads to queries in
   route loaders + TanStack Query. Real auth in `/account` and `/admin/login`. Delete
   `admin-auth.ts` and the user parts of `store.tsx`.
-- [ ] **Phase 2 — Checkout + Paystack.** Server fns `createCheckout`, `verifyPayment`, webhook
+- [x] **Phase 2 — Checkout + Paystack.** (Code done; add Paystack/Resend keys — supabase/README.md.) Server fns `createCheckout`, `verifyPayment`, webhook
   route, Resend emails (receipt, status changes, quote replies), pg_cron for holds. Admin actions
   become server fns. Delete `mock-db.ts`.
 - [ ] **Phase 3 — Media.** R2 presigned uploads for product videos/images and review media.

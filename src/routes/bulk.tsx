@@ -14,7 +14,8 @@ import {
   textareaClass,
 } from "@/components/site/forms";
 import { Button } from "@/components/ui/button";
-import { submitQuote } from "@/lib/actions";
+import { toast } from "sonner";
+import { submitQuote } from "@/lib/orders.functions";
 import type { StateName } from "@/lib/types";
 
 export const Route = createFileRoute("/bulk")({
@@ -94,7 +95,8 @@ function Bulk() {
     });
   };
 
-  const submit = (e: React.FormEvent) => {
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = schema.safeParse(f);
     if (!r.success) {
@@ -103,9 +105,16 @@ function Bulk() {
       return;
     }
     const { email, ...rest } = r.data;
-    const q = submitQuote({ ...rest, state: rest.state as StateName, ...(email ? { email } : {}) });
-    setSentId(q.id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setBusy(true);
+    try {
+      await submitQuote({ data: { ...rest, ...(email ? { email } : {}) } });
+      setSentId("sent");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't send your request");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
